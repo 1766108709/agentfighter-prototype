@@ -1,0 +1,272 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#070a0f" />
+    <meta name="description" content="AgentFighter：支持玩家对战脚本 AI、Agent 对战、无头模拟与逐帧复盘的浏览器格斗原型。" />
+    <meta property="og:title" content="AgentFighter v0.8" />
+    <meta property="og:description" content="玩家亲自上场挑战脚本 AI，或观看两个 Agent 使用同一套输入规则对决。" />
+    <meta property="og:type" content="website" />
+    <meta property="og:url" content="https://1766108709.github.io/agentfighter-prototype/" />
+    <link rel="canonical" href="https://1766108709.github.io/agentfighter-prototype/" />
+    <title>AgentFighter v0.8</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <main class="app-shell">
+      <header class="topbar">
+        <div class="brand">
+          <span class="brand-mark"></span>
+          <div>
+            <strong>AgentFighter</strong>
+            <small>SCRIPT FIGHTING LAB</small>
+          </div>
+        </div>
+        <div class="top-actions">
+          <span id="runtime-status" class="status-pill">准备中</span>
+          <button id="replay-button" class="icon-button replay-entry-button" type="button" title="复盘上一场" disabled>复盘</button>
+          <button id="pause-button" class="icon-button" type="button" title="暂停 / 继续（P）">Ⅱ</button>
+          <button id="sound-button" class="icon-button active" type="button" title="声音">♪</button>
+          <button id="debug-button" class="icon-button" type="button" title="真实判定框（F1）">BOX</button>
+        </div>
+      </header>
+
+      <section class="play-layout">
+        <div id="game-wrap" class="game-wrap">
+          <canvas id="game-canvas" width="1280" height="720" aria-label="AgentFighter game canvas"></canvas>
+
+          <div id="start-overlay" class="overlay visible">
+            <div class="overlay-card hero-card">
+              <p class="eyebrow">PLAYABLE PROTOTYPE v0.8</p>
+              <h1>玩家亲自上场，或观看<br /><span>两个脚本 Agent 对决</span></h1>
+              <p class="hero-copy">苍流与赤锋双角色模板，加入空战、地面攻防与专属连段。AI 和人类严格使用同一套输入规则。</p>
+              <div class="hero-actions">
+                <button id="start-button" class="primary-button" type="button">开始对战</button>
+                <button id="random-button" class="secondary-button" type="button">随机 Agent</button>
+                <button id="tod-show-button" class="showcase-button" type="button" aria-describedby="tod-show-hint">观看真实十割</button>
+              </div>
+              <p id="tod-show-hint" class="start-hint">按 Enter 也可以开始 · 十割表演使用真实输入、连击补正与资源结算</p>
+            </div>
+          </div>
+
+          <div id="match-overlay" class="overlay compact">
+            <div class="overlay-card result-card">
+              <p id="result-kicker" class="eyebrow">MATCH COMPLETE</p>
+              <h2 id="result-title">比赛结束</h2>
+              <p id="result-copy"></p>
+              <div class="hero-actions">
+                <button id="rematch-button" class="primary-button" type="button">再来一局</button>
+                <button id="result-replay-button" class="secondary-button" type="button" disabled>复盘上一场</button>
+                <button id="change-agent-button" class="secondary-button" type="button">换个 Agent</button>
+              </div>
+            </div>
+          </div>
+
+          <div id="round-banner" class="round-banner" aria-live="polite"></div>
+
+          <section id="tod-showcase-hud" class="tod-showcase-hud" aria-label="十割表演赛进度" aria-live="polite">
+            <div class="tod-showcase-heading">
+              <span class="tod-showcase-kicker">TRUE TOD EXHIBITION</span>
+              <strong data-role="tod-step">等待开场</strong>
+            </div>
+            <div class="tod-showcase-route">
+              <span>固定路线</span>
+              <b data-role="tod-route">c.C → 3D → QUICK MAX → YAKUMO</b>
+            </div>
+            <div class="tod-showcase-proof">
+              <span data-role="tod-hits">0 HIT</span>
+              <span data-role="tod-damage">0 DAMAGE</span>
+              <strong data-role="tod-verdict">等待验真</strong>
+            </div>
+          </section>
+        </div>
+
+        <section id="replay-panel" class="replay-panel" aria-label="战斗复盘控制台" hidden>
+          <header class="replay-heading">
+            <div>
+              <span class="replay-kicker">DETERMINISTIC REPLAY</span>
+              <strong>战斗复盘</strong>
+            </div>
+            <span id="replay-status" class="replay-status">录像未载入</span>
+          </header>
+
+          <div class="replay-transport" aria-label="复盘播放控制">
+            <button id="replay-prev-button" type="button" title="上一帧（←）">−1F</button>
+            <button id="replay-play-button" class="replay-play-button" type="button" title="播放 / 暂停（空格）">▶</button>
+            <button id="replay-next-button" type="button" title="下一帧（→）">+1F</button>
+            <label class="replay-speed-label">
+              <span>速度</span>
+              <select id="replay-speed-select" aria-label="复盘速度">
+                <option value="0.25">0.25×</option>
+                <option value="0.5">0.5×</option>
+                <option value="1" selected>1×</option>
+                <option value="2">2×</option>
+              </select>
+            </label>
+            <button id="replay-exit-button" class="replay-exit-button" type="button">退出复盘</button>
+          </div>
+
+          <div class="replay-timeline-wrap">
+            <div class="replay-timeline-labels">
+              <span id="replay-frame-label">FRAME 0 / 0</span>
+              <span id="replay-time-label">00:00.000 / 00:00.000</span>
+            </div>
+            <div class="replay-timeline-track">
+              <input id="replay-timeline" type="range" min="0" max="0" value="0" step="1" aria-label="复盘时间轴" />
+              <div id="replay-markers" class="replay-markers" aria-hidden="true"></div>
+            </div>
+            <div class="replay-marker-legend" aria-label="事件标记图例">
+              <span class="is-hit">命中</span><span class="is-block">防御</span><span class="is-throw">抓投</span>
+              <span class="is-knockdown">击倒</span><span class="is-super">超杀</span><span class="is-tod">TOD / KO</span>
+            </div>
+          </div>
+
+          <div class="replay-inspector">
+            <article class="replay-fighter-card is-left">
+              <div class="replay-card-heading"><span>P1 / LEFT</span><strong id="replay-left-name">—</strong></div>
+              <div class="replay-stat-line"><span>生命</span><b id="replay-left-health">—</b><span>资源</span><b id="replay-left-resource">—</b></div>
+              <div class="replay-field"><span>输入</span><code id="replay-left-input">N</code></div>
+              <div class="replay-field"><span>AI 意图</span><strong id="replay-left-intent">不可用</strong></div>
+              <div class="replay-field replay-reason"><span>理由</span><p id="replay-left-reason">本帧没有 AI 决策元数据</p></div>
+            </article>
+
+            <article class="replay-events-card">
+              <div class="replay-card-heading"><span>EVENT FEED</span><strong>最近事件</strong></div>
+              <ol id="replay-event-list" class="replay-event-list" aria-live="polite">
+                <li class="is-empty">当前帧附近没有战斗事件</li>
+              </ol>
+            </article>
+
+            <article class="replay-fighter-card is-right">
+              <div class="replay-card-heading"><span>P2 / RIGHT</span><strong id="replay-right-name">—</strong></div>
+              <div class="replay-stat-line"><span>生命</span><b id="replay-right-health">—</b><span>资源</span><b id="replay-right-resource">—</b></div>
+              <div class="replay-field"><span>输入</span><code id="replay-right-input">N</code></div>
+              <div class="replay-field"><span>AI 意图</span><strong id="replay-right-intent">不可用</strong></div>
+              <div class="replay-field replay-reason"><span>理由</span><p id="replay-right-reason">本帧没有 AI 决策元数据</p></div>
+            </article>
+          </div>
+        </section>
+
+        <aside class="control-rail">
+          <section class="panel agent-panel">
+            <div class="panel-heading">
+              <span>对手脚本</span>
+              <span class="live-dot">LIVE</span>
+            </div>
+            <label class="mode-row">
+              <span>对战模式</span>
+              <select id="mode-select">
+                <option value="human-vs-ai" selected>玩家 VS Agent</option>
+                <option value="ai-vs-ai">Agent VS Agent</option>
+              </select>
+            </label>
+            <div class="template-grid" aria-label="角色模板">
+              <label id="left-template-row" class="template-row">
+                <span id="left-template-label">玩家模板</span>
+                <select id="left-template-select">
+                  <option value="vanguard" selected>苍流 · 全能型</option>
+                  <option value="ember">赤锋 · 连击型</option>
+                </select>
+              </label>
+              <label id="right-template-row" class="template-row">
+                <span id="right-template-label">对手模板</span>
+                <select id="right-template-select">
+                  <option value="vanguard">苍流 · 全能型</option>
+                  <option value="ember" selected>赤锋 · 连击型</option>
+                </select>
+              </label>
+            </div>
+            <label id="left-agent-row" class="agent-side-row is-hidden">
+              <span id="left-agent-label">左侧 Agent</span>
+              <select id="left-agent-select">
+                <option value="balanced">均衡型 · Echo</option>
+                <option value="pressure" selected>压迫型 · Blitz</option>
+                <option value="zoner">远程型 · Vela</option>
+                <option value="triad-champion">黑盒冠军 · Triad</option>
+              </select>
+            </label>
+            <label id="right-agent-row" class="agent-side-row">
+              <span id="right-agent-label">对手 Agent</span>
+              <select id="agent-select">
+                <option value="balanced">均衡型 · Echo</option>
+                <option value="pressure">压迫型 · Blitz</option>
+                <option value="zoner">远程型 · Vela</option>
+                <option value="triad-champion">黑盒冠军 · Triad</option>
+              </select>
+            </label>
+            <label>
+              <span>难度</span>
+              <select id="difficulty-select">
+                <option value="easy">热身</option>
+                <option value="normal" selected>标准</option>
+                <option value="hard">强敌</option>
+              </select>
+            </label>
+            <label>
+              <span>AI 观测延迟</span>
+              <select id="delay-select">
+                <option value="15">15F · 更像人类</option>
+                <option value="12" selected>12F · 推荐</option>
+                <option value="6">6F · 强反应</option>
+                <option value="0">0F · 实验</option>
+              </select>
+            </label>
+            <p id="agent-description" class="agent-description">中距离控场，按局势切换攻防。</p>
+          </section>
+
+          <section id="controls-panel" class="panel controls-panel">
+            <div class="panel-heading"><span id="controls-title">玩家操作</span><span id="controls-side">P1</span></div>
+            <p id="controls-mode-note" class="controls-mode-note">双 Agent 观战 · 操作键已停用</p>
+            <div class="key-grid movement-grid">
+              <span></span><kbd>W</kbd><span></span>
+              <kbd>A</kbd><kbd>S</kbd><kbd>D</kbd>
+            </div>
+            <div class="button-layouts">
+              <div class="button-layout">
+                <strong>6键 · SF</strong>
+                <p><kbd>U</kbd><kbd>I</kbd><kbd>O</kbd><span>LP · MP · HP</span></p>
+                <p><kbd>J</kbd><kbd>K</kbd><kbd>L</kbd><span>LK · MK · HK</span></p>
+              </div>
+              <div class="button-layout kof-layout">
+                <strong>4键 · KOF</strong>
+                <p><kbd>U</kbd><kbd>J</kbd><span>A · LP / B · LK</span></p>
+                <p><kbd>O</kbd><kbd>L</kbd><span>C · HP / D · HK</span></p>
+              </div>
+            </div>
+            <div class="move-list system-key-grid">
+              <div><kbd>H</kbd><span>投技</span></div>
+              <div><kbd>Shift</kbd><span>Parry / Roll</span></div>
+              <div><kbd>;</kbd><span>Impact / Blowback</span></div>
+              <div><kbd>Space</kbd><span>防御快捷键</span></div>
+            </div>
+            <p class="relative-hint">方向会按当前朝向自动镜像</p>
+          </section>
+
+          <section class="panel commands-panel">
+            <div class="panel-heading"><span>完整出招表</span><span>MOVE DATA</span></div>
+            <div id="move-data-list" class="move-data-list" aria-live="polite">
+              <p class="move-data-empty">正在读取角色招式…</p>
+            </div>
+          </section>
+
+          <section class="panel tips-panel">
+            <div class="panel-heading"><span>快速提示</span><span>?</span></div>
+            <ul>
+              <li>站防挡上 / 中段；蹲防挡下段 / 飞行物。</li>
+              <li>蹲下能闪过上段，但会被中段打中。</li>
+              <li>抓投破防；跳跃和后退可以躲投。</li>
+            </ul>
+            <button id="restart-button" class="rail-button" type="button">重新开始</button>
+          </section>
+        </aside>
+      </section>
+
+      <footer class="footer-note">
+        <span>Prototype v0.8 · Canvas 2D · 60Hz</span>
+        <span>6键 SF / 4键 KOF · 角色专属帧数据</span>
+      </footer>
+    </main>
+    <script type="module" src="./src/main.js"></script>
+  </body>
+</html>
