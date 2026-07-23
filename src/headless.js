@@ -139,6 +139,8 @@ export function parseHeadlessArgs(argv = []) {
  * controller decision with the runner's JSON-safe `lastDecision` metadata.
  * `recordReplay` attaches ReplayV1 to each result; `onMatchReplay` can consume
  * it without retaining every replay in the tournament summary.
+ * `matchIdForMatch(matchIndex)` can provide a host-owned public match id for
+ * API runners; the CLI keeps its deterministic `headless-{seed}-{index}` ids.
  *
  * @param {object} [options] normal headless tournament settings
  * @param {object} [runtime] Agent V1 injection and runner settings
@@ -288,7 +290,14 @@ function runSingleMatch(config, matchIndex, runtime) {
     left: game.fighters[0].templateId,
     right: game.fighters[1].templateId,
   };
-  const matchId = `headless-${config.seed}-${matchIndex + 1}`;
+  const suppliedMatchId = runtime.matchIdForMatch?.(matchIndex, {
+    seed: config.seed,
+    left,
+    right,
+  });
+  const matchId = suppliedMatchId === undefined
+    ? `headless-${config.seed}-${matchIndex + 1}`
+    : externalMatchId(suppliedMatchId);
   aiA.reset(createMatchInfoV1(game, left === "A" ? 0 : 1, {
     matchId,
     matchIndex,
@@ -492,7 +501,18 @@ function validateAgentRuntime(runtime) {
   if (runtime.onMatchReplay !== undefined && typeof runtime.onMatchReplay !== "function") {
     throw new HeadlessArgumentError("runtime.onMatchReplay 必须是函数 / runtime.onMatchReplay must be a function");
   }
+  if (runtime.matchIdForMatch !== undefined && typeof runtime.matchIdForMatch !== "function") {
+    throw new HeadlessArgumentError("runtime.matchIdForMatch 必须是函数 / runtime.matchIdForMatch must be a function");
+  }
   return runtime;
+}
+
+function externalMatchId(value) {
+  const id = String(value ?? "").trim();
+  if (!/^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/.test(id)) {
+    throw new HeadlessArgumentError("match id 必须是安全标识符 / match id must be a safe identifier");
+  }
+  return id;
 }
 
 function participantForWinner(winner, left, right) {

@@ -4,13 +4,13 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="theme-color" content="#070a0f" />
-    <meta name="description" content="AgentFighter：支持玩家对战脚本 AI、Agent 对战、无头模拟与逐帧复盘的浏览器格斗原型。" />
-    <meta property="og:title" content="AgentFighter v0.8" />
-    <meta property="og:description" content="玩家亲自上场挑战脚本 AI，或观看两个 Agent 使用同一套输入规则对决。" />
+    <meta name="description" content="AgentFighter：支持玩家对战脚本 AI、外部大模型编写 Agent、无头模拟与逐帧复盘的浏览器格斗原型。" />
+    <meta property="og:title" content="AgentFighter v0.9" />
+    <meta property="og:description" content="玩家亲自挑战脚本 AI，或把 Fighter Key 与指南交给自己的大模型，让它编写、模拟并发布格斗 Agent。" />
     <meta property="og:type" content="website" />
     <meta property="og:url" content="https://1766108709.github.io/agentfighter-prototype/" />
     <link rel="canonical" href="https://1766108709.github.io/agentfighter-prototype/" />
-    <title>AgentFighter v0.8</title>
+    <title>AgentFighter v0.9</title>
     <link rel="stylesheet" href="./styles.css" />
   </head>
   <body>
@@ -25,6 +25,7 @@
         </div>
         <div class="top-actions">
           <span id="runtime-status" class="status-pill">准备中</span>
+          <button id="agent-access-button" class="icon-button agent-access-button" type="button" title="让你自己的大模型编写并提交 Agent">接入 Agent</button>
           <button id="replay-button" class="icon-button replay-entry-button" type="button" title="复盘上一场" disabled>复盘</button>
           <button id="pause-button" class="icon-button" type="button" title="暂停 / 继续（P）">Ⅱ</button>
           <button id="sound-button" class="icon-button active" type="button" title="声音">♪</button>
@@ -38,7 +39,7 @@
 
           <div id="start-overlay" class="overlay visible">
             <div class="overlay-card hero-card">
-              <p class="eyebrow">PLAYABLE PROTOTYPE v0.8</p>
+              <p class="eyebrow">PLAYABLE PROTOTYPE v0.9</p>
               <h1>玩家亲自上场，或观看<br /><span>两个脚本 Agent 对决</span></h1>
               <p class="hero-copy">苍流与赤锋双角色模板，加入空战、地面攻防与专属连段。AI 和人类严格使用同一套输入规则。</p>
               <div class="hero-actions">
@@ -263,10 +264,58 @@
       </section>
 
       <footer class="footer-note">
-        <span>Prototype v0.8 · Canvas 2D · 60Hz</span>
+        <span>Prototype v0.9 · Canvas 2D · 60Hz</span>
         <span>6键 SF / 4键 KOF · 角色专属帧数据</span>
       </footer>
     </main>
+
+    <dialog id="agent-access-dialog" class="agent-access-dialog" aria-labelledby="agent-access-title">
+      <form method="dialog" class="agent-access-card">
+        <header class="agent-access-heading">
+          <div>
+            <span>BRING YOUR OWN AGENT</span>
+            <h2 id="agent-access-title">让你的大模型来写格斗脚本</h2>
+          </div>
+          <button class="agent-access-close" value="cancel" aria-label="关闭">×</button>
+        </header>
+
+        <p class="agent-access-intro">游戏签发 Fighter Key；你把 API 地址、Key 和 Agent Guide 交给自己的 Codex、Claude Code 或 Cursor。模型通过游戏 API 上传脚本、模拟、挑战并读取复盘。AgentFighter 不需要、不会请求、接收或保存 OpenAI、Anthropic 等模型厂商 API Key。</p>
+
+        <label>
+          <span>Agent API 地址</span>
+          <input id="agent-api-base" type="url" autocomplete="url" spellcheck="false" />
+        </label>
+        <p id="agent-api-status" class="agent-api-status">正在检查 Agent API…</p>
+
+        <div class="agent-access-grid">
+          <label>
+            <span>角色名</span>
+            <input id="agent-fighter-name" type="text" maxlength="48" value="My Fighter" autocomplete="off" />
+          </label>
+          <label>
+            <span>角色模板</span>
+            <select id="agent-fighter-template">
+              <option value="vanguard" selected>苍流 · 全能型</option>
+              <option value="ember">赤锋 · 连击型</option>
+            </select>
+          </label>
+        </div>
+
+        <button id="agent-create-button" class="primary-button agent-create-button" type="button" disabled>生成 Fighter Key</button>
+
+        <section id="agent-onboarding-result" class="agent-onboarding-result" hidden>
+          <strong>只显示这一次，请立即复制</strong>
+          <label>
+            <span>交给你的大模型的完整指令</span>
+            <textarea id="agent-onboarding-prompt" rows="10" readonly></textarea>
+          </label>
+          <div class="agent-onboarding-actions">
+            <button id="agent-copy-button" class="primary-button" type="button">复制给大模型</button>
+            <a id="agent-guide-link" class="secondary-button" target="_blank" rel="noreferrer">打开 Agent Guide</a>
+          </div>
+        </section>
+      </form>
+    </dialog>
     <script type="module" src="./src/main.js"></script>
   </body>
 </html>

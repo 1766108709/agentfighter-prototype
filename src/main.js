@@ -15,6 +15,7 @@ import {
   evaluateTodExhibition,
   prepareTodExhibition,
 } from "./tod-exhibition.js";
+import "./agent-access-ui.js";
 
 const TICK_MS = 1000 / 60;
 const MAX_STEPS = 6;
@@ -498,6 +499,29 @@ function enterReplay() {
   setReplayPlayback(false);
   applyReplayStatus(replayPlayer.reset());
   refreshReplayAvailability();
+}
+
+async function loadRemoteReplayFromQuery() {
+  const matchId = new URLSearchParams(window.location.search).get("match");
+  if (!matchId) return;
+  if (!/^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/.test(matchId)) {
+    statusNode.textContent = "远程复盘链接无效";
+    return;
+  }
+  statusNode.textContent = "正在读取 Agent 正式赛复盘…";
+  try {
+    const response = await fetch(`./api/matches/${encodeURIComponent(matchId)}/replay.json`, {
+      headers: { Accept: "application/json" },
+    });
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    lastReplay = await response.json();
+    playing = false;
+    enterReplay();
+    if (replayStatusNode) replayStatusNode.textContent = `正式赛 ${matchId} · 已暂停`;
+  } catch (error) {
+    statusNode.textContent = `远程复盘读取失败 · ${error.message}`;
+    console.error("Unable to load remote replay", error);
+  }
 }
 
 function exitReplay() {
@@ -1349,3 +1373,4 @@ createFreshGame(readMatchConfig(), browserMatchSeedSequence.peek());
 statusNode.textContent = runtimeStatusText();
 renderer.resize?.();
 requestAnimationFrame(frame);
+void loadRemoteReplayFromQuery();

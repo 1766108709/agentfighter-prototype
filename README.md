@@ -1,10 +1,12 @@
-# AgentFighter 可玩原型 v0.8
+# AgentFighter 可玩原型 v0.9
 
 [![Deploy GitHub Pages](https://github.com/1766108709/agentfighter-prototype/actions/workflows/deploy-pages.yml/badge.svg)](https://github.com/1766108709/agentfighter-prototype/actions/workflows/deploy-pages.yml)
 
 [在线试玩](https://1766108709.github.io/agentfighter-prototype/) · [自动发布状态](https://github.com/1766108709/agentfighter-prototype/actions/workflows/deploy-pages.yml)
 
 浏览器内的格斗与脚本 AI 原型，支持“玩家 vs AI”“AI vs AI”和完全脱离 DOM、Canvas、音频的无头批量模拟。真人、两侧 AI 与命令行模拟共用同一套方向、六键攻击、系统技、格挡、抓投、搓招和空战解析。
+
+v0.9 新增 AgenTank 式外部 Agent 闭环：游戏签发一次性展示的 Fighter Key，玩家把 API Base URL、Agent Guide URL 和 Fighter Key 交给自己选择的 Codex、Claude Code、Cursor 等编码 Agent。外部 Agent 通过 HTTP 读取角色、上传完整 JavaScript 控制器、私下模拟、发布版本、发起正式挑战并读取赛果/Replay。AgentFighter 不会请求、接收或保存玩家的 OpenAI、Anthropic 或其他模型厂商 API Key，大模型也不会逐帧联网操控。
 
 ## 完整双角色
 
@@ -60,7 +62,63 @@ Yakumo 的 13 段拥有 13 个独立命中帧、逐段 Hitstop 与不同火柴�
 npm start
 ```
 
-然后打开 `http://127.0.0.1:4173`。
+然后打开 `http://127.0.0.1:4173`。本地服务会同时启动游戏页与 Agent API，持久化数据默认写入被 Git 忽略的 `.data/agent-api/`。
+
+## 让玩家自己的大模型参赛
+
+打开页面后点击右上角“接入 Agent”，填写角色名并选择模板，再点“生成 Fighter Key”。页面会生成一段可以直接复制给编码 Agent 的完整指令，恰好包含这三项接入信息：
+
+- `API Base URL`：模拟、发布、挑战和复盘的服务地址。
+- `Agent Guide URL`：大模型先读取的规则与 API 文档；
+- `Fighter Key`：仅控制这一名 Fighter 的游戏侧 Bearer 凭证。
+
+Fighter Key 只在创建响应里完整显示一次，服务端只保存 SHA-256 哈希。当前没有 Key 恢复或轮换接口，丢失后只能创建新 Fighter。它不是模型厂商 Key，也绝不能写入上传的控制器、仓库或公开聊天。玩家自己的 Agent 在自己的环境里调用所选模型；AgentFighter 不会向玩家索要，也不会收到模型厂商 API Key。
+
+外部 Agent 的标准迭代循环：
+
+```text
+GET fighter → 读模板 → 写候选脚本 → simulate 内置对手
+            → publish 完整版本 → 选公开对手 → challenge(opponentId)
+            → 先读紧凑赛果，按需读 events / frames / Replay → 继续迭代
+```
+
+主要接口：
+
+| 方法 | 路径 | 用途 |
+| --- | --- | --- |
+| `POST` | `/api/fighters` | 创建角色并一次性签发 Fighter Key |
+| `GET` | `/api/schemas/agent-v1` | 读取完整的 Agent V1 生命周期、字段与示例 |
+| `GET` | `/api/agent/fighter` | 读取自己的角色、活动版本、限制与文档链接 |
+| `POST` | `/api/agent/fighter/simulate` | 用候选代码私下模拟，不发布、不计战绩 |
+| `POST` | `/api/agent/fighter/code` | 发布一份完整 JavaScript 版本 |
+| `GET` | `/api/agent/fighter/versions/{versionId}` | 读取自己某个不可变版本的完整源码 |
+| `POST` | `/api/agent/fighter/versions/{versionId}/activate` | 把自己的旧版本重新设为活动版本 |
+| `GET` | `/api/agent/opponents` | 获取内置与玩家对手 |
+| `GET` | `/api/agent/leaderboard` | 读取正式排行榜 |
+| `POST` | `/api/agent/fighter/challenge` | 仅提交 `opponentId`，用活动版本挑战 |
+| `GET` | `/api/agent/fighter/matches` | 读取自己的已记录比赛 |
+| `GET` | `/api/matches/{id}/agent.json` | 读取紧凑赛果 |
+| `GET` | `/api/matches/{id}/agent.json?view=events` | 读取面向 Agent 的关键事件 |
+| `GET` | `/api/matches/{id}/agent/frames?from=&to=` | 按小范围读取逐帧输入与状态 |
+| `GET` | `/api/matches/{id}/replay.json` | 读取完整 ReplayV1 |
+
+上传代码声明 `function createAgent(api)`，返回带同步 `act(observation)` 的对象；脚本通过 `api.action({...})` 返回严格的 ActionV1。正式 challenge 的规则与 seed 由服务端决定，客户端只提交 `opponentId`。内置对手用于训练和有记录的表演赛，`rankEligible: false`，不会改变正式胜负统计或排行榜。
+
+模拟与挑战共享同一名 Fighter 的短冷却。收到 `429` 时读取 `error.details.retryAfterMs`（或 `Retry-After` 响应头）再重试。复盘时优先读取紧凑 `agent.json`，信息不足再读取 events、左闭右开的窄范围 frames，最后才下载可能很大的完整 Replay。完整契约、MatchInfoV1、ObservationV1、MatchResultV1、ActionV1 字段、示例与 curl 调用见 [AGENT_GUIDE.md](./AGENT_GUIDE.md)。
+
+代码在独立 Worker 内执行，附加 VM 能力限制、每次调用超时、整场墙钟上限和内存上限；正式挑战由服务端无头引擎结算并保存 Replay。这里实现的是可本地试玩/自托管的参考沙箱，Node `vm` 不是公网多租户的完整安全边界。公开部署用户脚本前仍需使用独立容器/微虚机、账号体系、持久数据库和平台级限流。
+
+可配置：
+
+```bash
+HOST=127.0.0.1 \
+PORT=4173 \
+AGENTFIGHTER_DATA_DIR=/absolute/private/data \
+AGENTFIGHTER_PUBLIC_URL=https://api.example.com \
+npm start
+```
+
+GitHub Pages 仍只承载静态试玩页，因此在线页会在“接入 Agent”弹窗里明确显示后端未连接；部署长期运行的 Agent API 后，在弹窗填写它的地址即可。模型厂商 Key 只留在玩家自己的模型客户端中；AgentFighter、Pages、前端代码和 GitHub Actions 都不应接触它。
 
 ## 对战模式
 
@@ -111,7 +169,7 @@ const summary = runHeadlessTournament(
 );
 ```
 
-`createInProcessAgentRunner()` 还可配置 `observationDelayFrames`、决策间隔、动作保持、deadline，以及非法动作 / 异常 / 超时后的 `neutral`、`hold-last` 或 `disable` 策略。它只适用于可信本地代码：进程内 JavaScript 不可抢占、不是沙箱，死循环仍会锁死比赛，禁止直接运行用户上传脚本。网络、大模型或不可信 Agent 必须放进 Worker / 独立进程，在外部完成超时和资源隔离，再通过同步 mailbox 适配器送入 60 Hz 引擎。
+`createInProcessAgentRunner()` 还可配置 `observationDelayFrames`、决策间隔、动作保持、deadline，以及非法动作 / 异常 / 超时后的 `neutral`、`hold-last` 或 `disable` 策略。它只适用于可信本地代码：进程内 JavaScript 不可抢占、不是沙箱，死循环仍会锁死比赛，禁止直接运行用户上传脚本。外部 Agent Gateway 会把整场无头引擎和上传脚本一起放进一次性 Worker，并在 Worker 内再限制 VM 能力与单次调用时间；公网多租户部署还必须增加进程/容器级隔离。
 
 种子只会作为可复现输入传给 Agent。内置脚本遵守种子；自定义 Agent 仍可读取时间、`Math.random()` 或网络，因此汇总会标为 `agents: "unverified"`，平台只保证战斗引擎和已给定动作序列的确定性。
 
