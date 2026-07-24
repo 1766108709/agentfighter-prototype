@@ -80,13 +80,11 @@ function runMatch() {
   const pressure = createScriptAI({
     preset: "pressure",
     difficulty: "hard",
-    observationDelayFrames: 6,
     seed: 11,
   });
   const zoner = createScriptAI({
     preset: "zoner",
     difficulty: "normal",
-    observationDelayFrames: 12,
     seed: 22,
   });
   const agents = [pressure, zoner];
@@ -145,7 +143,6 @@ function verifyIndependentAgentState() {
   const options = {
     preset: "zoner",
     difficulty: "normal",
-    observationDelayFrames: 0,
     seed: 9,
   };
   const first = createScriptAI(options);

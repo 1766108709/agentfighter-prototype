@@ -1,4 +1,4 @@
-import { CHARACTER_TEMPLATES, MOVESETS, createGame, nextRound, stepGame, TICK_RATE } from "./engine.js";
+import { MOVESETS, createGame, nextRound, stepGame, TICK_RATE } from "./engine.js";
 import { AI_PRESETS } from "./ai.js";
 import { TACTICAL_INTENTS } from "./ai-planner.js";
 import { createReplayRecorder } from "./replay.js";
@@ -10,7 +10,9 @@ import {
 } from "./agent-sdk.js";
 
 const AGENT_IDS = Object.freeze(["balanced", "pressure", "zoner"]);
-const TEMPLATE_IDS = Object.freeze(["vanguard", "ember"]);
+const SINGLE_FIGHTER_ID = "vanguard";
+const SINGLE_FIGHTER_NAME = "苍流";
+const REMOVED_TEMPLATE_FLAGS = Object.freeze(new Set(["--template-a", "--template-b"]));
 const DIFFICULTIES = Object.freeze(["easy", "normal", "hard", "expert"]);
 const FORMATS = Object.freeze(["text", "json"]);
 const MAX_MATCHES = 100000;
@@ -19,10 +21,7 @@ export const HEADLESS_DEFAULTS = Object.freeze({
   matches: 100,
   agentA: "balanced",
   agentB: "zoner",
-  templateA: "vanguard",
-  templateB: "ember",
   difficulty: "normal",
-  delay: 12,
   seed: 1,
   roundSeconds: 60,
   bestOf: 3,
@@ -39,10 +38,7 @@ export const HEADLESS_HELP = `AgentFighter 无头锦标赛 / Headless Tournament
   --matches <n>          比赛数量，默认 100
   --agent-a <preset>     A 选手：balanced|pressure|zoner
   --agent-b <preset>     B 选手：balanced|pressure|zoner
-  --template-a <id>      A 模板：vanguard|ember，默认 vanguard
-  --template-b <id>      B 模板：vanguard|ember，默认 ember
   --difficulty <level>   easy|normal|hard|expert，默认 normal
-  --delay <frames>       双方观测延迟 0-120F，默认 12
   --seed <uint32>        锦标赛确定性种子，默认 1
   --round-seconds <n>    每回合秒数 10-300，默认 60
   --best-of <odd>        奇数局制 1|3|5|7|9，默认 3
@@ -69,10 +65,7 @@ export function parseHeadlessArgs(argv = []) {
     ["--matches", "matches"],
     ["--agent-a", "agentA"],
     ["--agent-b", "agentB"],
-    ["--template-a", "templateA"],
-    ["--template-b", "templateB"],
     ["--difficulty", "difficulty"],
-    ["--delay", "delay"],
     ["--seed", "seed"],
     ["--round-seconds", "roundSeconds"],
     ["--best-of", "bestOf"],
@@ -93,6 +86,12 @@ export function parseHeadlessArgs(argv = []) {
 
     const separator = raw.indexOf("=");
     const flag = separator >= 0 ? raw.slice(0, separator) : raw;
+    if (REMOVED_TEMPLATE_FLAGS.has(flag)) {
+      throw new HeadlessArgumentError(
+        `${flag} 已移除；双方固定使用 ${SINGLE_FIGHTER_ID}（${SINGLE_FIGHTER_NAME}）`
+        + ` / ${flag} has been removed; both sides use ${SINGLE_FIGHTER_ID}`,
+      );
+    }
     const property = valueOptions.get(flag);
     if (!property) {
       throw new HeadlessArgumentError(`未知参数 / Unknown option: ${raw}`);
@@ -139,6 +138,8 @@ export function parseHeadlessArgs(argv = []) {
  * controller decision with the runner's JSON-safe `lastDecision` metadata.
  * `recordReplay` attaches ReplayV1 to each result; `onMatchReplay` can consume
  * it without retaining every replay in the tournament summary.
+ * `matchIdForMatch(matchIndex)` can provide a host-owned public match id for
+ * API runners; the CLI keeps its deterministic `headless-{seed}-{index}` ids.
  *
  * @param {object} [options] normal headless tournament settings
  * @param {object} [runtime] Agent V1 injection and runner settings
@@ -177,8 +178,8 @@ export function runHeadlessTournament(options = {}, runtime = {}) {
   const wallTimeMs = monotonicNow() - startedAt;
   const simulatedSeconds = totalFrames / TICK_RATE;
   const fps = wallTimeMs > 0 ? totalFrames / (wallTimeMs / 1000) : 0;
-  const participantA = participantSummary("A", config.agentA, config.templateA, wins, actions, telemetry, config.matches, results[0]?.agents?.A, diagnostics.A);
-  const participantB = participantSummary("B", config.agentB, config.templateB, wins, actions, telemetry, config.matches, results[0]?.agents?.B, diagnostics.B);
+  const participantA = participantSummary("A", config.agentA, SINGLE_FIGHTER_ID, wins, actions, telemetry, config.matches, results[0]?.agents?.A, diagnostics.A);
+  const participantB = participantSummary("B", config.agentB, SINGLE_FIGHTER_ID, wins, actions, telemetry, config.matches, results[0]?.agents?.B, diagnostics.B);
   const injectedAgents = Boolean(runtime.agents?.A || runtime.agents?.B || runtime.createAgent);
 
   return {
@@ -195,7 +196,7 @@ export function runHeadlessTournament(options = {}, runtime = {}) {
       B: telemetry.B,
       totals: combinedTelemetry(telemetry.A, telemetry.B),
     },
-    templates: { A: config.templateA, B: config.templateB },
+    templates: { A: SINGLE_FIGHTER_ID, B: SINGLE_FIGHTER_ID },
     participants: { A: participantA, B: participantB },
     diagnostics,
     determinism: {
@@ -212,10 +213,8 @@ export function runHeadlessTournament(options = {}, runtime = {}) {
     settings: {
       agentA: config.agentA,
       agentB: config.agentB,
-      templateA: config.templateA,
-      templateB: config.templateB,
       difficulty: config.difficulty,
-      delay: config.delay,
+      observation: "realtime",
       seed: config.seed,
       roundSeconds: config.roundSeconds,
       bestOf: config.bestOf,
@@ -238,7 +237,7 @@ export function formatHeadlessText(summary) {
   const lines = [
     "AgentFighter 无头锦标赛 / Headless Tournament",
     `A: ${a.name} (${a.preset} · ${a.template})  vs  B: ${b.name} (${b.preset} · ${b.template})`,
-    `设置: ${summary.matches} 场 · ${settings.bestOf} 局制 · ${settings.roundSeconds}s/回合 · ${settings.difficulty} · ${settings.delay}F 延迟 · seed ${settings.seed}`,
+    `设置: ${summary.matches} 场 · ${settings.bestOf} 局制 · ${settings.roundSeconds}s/回合 · ${settings.difficulty} · 实时观测 · seed ${settings.seed}`,
     `换边: ${settings.swapSides ? "开启（每场交替）" : "关闭"}`,
     "",
     `A  ${a.wins}胜 ${a.losses}负 ${a.draws}平 · 胜率 ${percent(a.winRate)}`,
@@ -265,12 +264,12 @@ function runSingleMatch(config, matchIndex, runtime) {
   let seedB = deriveSeed(config.seed, matchIndex, 0x9e3779b9);
   if (seedB === seedA) seedB = (seedB + 0x6d2b79f5) >>> 0;
 
-  const aiA = createTournamentAI("A", config.agentA, config.templateA, config, seedA, matchIndex, runtime);
-  const aiB = createTournamentAI("B", config.agentB, config.templateB, config, seedB, matchIndex, runtime);
+  const aiA = createTournamentAI("A", config.agentA, SINGLE_FIGHTER_ID, config, seedA, matchIndex, runtime);
+  const aiB = createTournamentAI("B", config.agentB, SINGLE_FIGHTER_ID, config, seedB, matchIndex, runtime);
   const leftAI = left === "A" ? aiA : aiB;
   const rightAI = right === "A" ? aiA : aiB;
-  const leftTemplate = left === "A" ? config.templateA : config.templateB;
-  const rightTemplate = right === "A" ? config.templateA : config.templateB;
+  const leftTemplate = SINGLE_FIGHTER_ID;
+  const rightTemplate = SINGLE_FIGHTER_ID;
   let game = createGame({
     bestOf: config.bestOf,
     roundSeconds: config.roundSeconds,
@@ -288,7 +287,14 @@ function runSingleMatch(config, matchIndex, runtime) {
     left: game.fighters[0].templateId,
     right: game.fighters[1].templateId,
   };
-  const matchId = `headless-${config.seed}-${matchIndex + 1}`;
+  const suppliedMatchId = runtime.matchIdForMatch?.(matchIndex, {
+    seed: config.seed,
+    left,
+    right,
+  });
+  const matchId = suppliedMatchId === undefined
+    ? `headless-${config.seed}-${matchIndex + 1}`
+    : externalMatchId(suppliedMatchId);
   aiA.reset(createMatchInfoV1(game, left === "A" ? 0 : 1, {
     matchId,
     matchIndex,
@@ -399,8 +405,8 @@ function runSingleMatch(config, matchIndex, runtime) {
     left,
     right,
     templates: {
-      A: config.templateA,
-      B: config.templateB,
+      A: SINGLE_FIGHTER_ID,
+      B: SINGLE_FIGHTER_ID,
       ...sideTemplates,
     },
     winner,
@@ -449,9 +455,6 @@ function createTournamentAI(participant, preset, template, config, seed, matchIn
   const agent = injected ?? createScriptAIAgent({
     preset,
     difficulty: config.difficulty,
-    // Fairness delay is enforced once by the platform runner for built-in and
-    // injected Agents alike; the legacy implementation must not apply it twice.
-    observationDelayFrames: 0,
     seed,
     movesets: MOVESETS,
   });
@@ -460,7 +463,6 @@ function createTournamentAI(participant, preset, template, config, seed, matchIn
   const runner = createInProcessAgentRunner(agent, {
     ...sharedOptions,
     ...participantOptions,
-    observationDelayFrames: config.delay,
   });
   runner.source = injected ? "injected" : "preset";
   runner.agentDeterminism = injected ? "unverified" : "seeded-built-in";
@@ -492,7 +494,18 @@ function validateAgentRuntime(runtime) {
   if (runtime.onMatchReplay !== undefined && typeof runtime.onMatchReplay !== "function") {
     throw new HeadlessArgumentError("runtime.onMatchReplay 必须是函数 / runtime.onMatchReplay must be a function");
   }
+  if (runtime.matchIdForMatch !== undefined && typeof runtime.matchIdForMatch !== "function") {
+    throw new HeadlessArgumentError("runtime.matchIdForMatch 必须是函数 / runtime.matchIdForMatch must be a function");
+  }
   return runtime;
+}
+
+function externalMatchId(value) {
+  const id = String(value ?? "").trim();
+  if (!/^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/.test(id)) {
+    throw new HeadlessArgumentError("match id 必须是安全标识符 / match id must be a safe identifier");
+  }
+  return id;
 }
 
 function participantForWinner(winner, left, right) {
@@ -530,14 +543,13 @@ function moveTable(moveset) {
 }
 
 function dynamicActionIds(catalogue) {
-  return [...new Set(
-    Object.values(catalogue ?? {}).flatMap((moveset) => [
-      ...Object.keys(moveTable(moveset)),
-      ...Object.entries(moveset ?? {})
-        .filter(([, move]) => move && typeof move === "object" && Number.isFinite(move.startup))
-        .map(([id]) => id),
-    ]),
-  )].sort();
+  const moveset = catalogue?.[SINGLE_FIGHTER_ID];
+  return [...new Set([
+    ...Object.keys(moveTable(moveset)),
+    ...Object.entries(moveset ?? {})
+      .filter(([, move]) => move && typeof move === "object" && Number.isFinite(move.startup))
+      .map(([id]) => id),
+  ])].sort();
 }
 
 function emptyActionDistribution(actionIds = dynamicActionIds(MOVESETS)) {
@@ -732,7 +744,7 @@ function participantSummary(id, preset, template, wins, actions, telemetry, matc
     source: identity.source ?? "preset",
     determinism: identity.determinism ?? "unverified",
     template,
-    templateName: CHARACTER_TEMPLATES[template]?.name || template,
+    templateName: template === SINGLE_FIGHTER_ID ? SINGLE_FIGHTER_NAME : template,
     wins: wins[id],
     losses: wins[other],
     draws: wins.draw,
@@ -747,14 +759,22 @@ function validateAndNormalize(options, { preserveFormat = false } = {}) {
   if (!options || typeof options !== "object" || Array.isArray(options)) {
     throw new HeadlessArgumentError("options 必须是对象 / options must be an object");
   }
+  if (Object.hasOwn(options, "delay")) {
+    throw new HeadlessArgumentError(
+      "delay 已取消；观测始终实时 / delay has been removed; observations are always real-time",
+    );
+  }
+  if (Object.hasOwn(options, "templateA") || Object.hasOwn(options, "templateB")) {
+    throw new HeadlessArgumentError(
+      `templateA/templateB 已移除；双方固定使用 ${SINGLE_FIGHTER_ID}（${SINGLE_FIGHTER_NAME}）`
+      + ` / templateA/templateB have been removed; both sides use ${SINGLE_FIGHTER_ID}`,
+    );
+  }
 
   const matches = integerOption(options.matches ?? HEADLESS_DEFAULTS.matches, "matches", 1, MAX_MATCHES);
   const agentA = enumOption(options.agentA ?? HEADLESS_DEFAULTS.agentA, "agent-a", AGENT_IDS);
   const agentB = enumOption(options.agentB ?? HEADLESS_DEFAULTS.agentB, "agent-b", AGENT_IDS);
-  const templateA = enumOption(options.templateA ?? HEADLESS_DEFAULTS.templateA, "template-a", TEMPLATE_IDS);
-  const templateB = enumOption(options.templateB ?? HEADLESS_DEFAULTS.templateB, "template-b", TEMPLATE_IDS);
   const difficulty = enumOption(options.difficulty ?? HEADLESS_DEFAULTS.difficulty, "difficulty", DIFFICULTIES);
-  const delay = integerOption(options.delay ?? HEADLESS_DEFAULTS.delay, "delay", 0, 120);
   const seed = integerOption(options.seed ?? HEADLESS_DEFAULTS.seed, "seed", 0, 0xffffffff);
   const roundSeconds = integerOption(options.roundSeconds ?? HEADLESS_DEFAULTS.roundSeconds, "round-seconds", 10, 300);
   const bestOf = integerOption(options.bestOf ?? HEADLESS_DEFAULTS.bestOf, "best-of", 1, 9);
@@ -791,10 +811,7 @@ function validateAndNormalize(options, { preserveFormat = false } = {}) {
     matches,
     agentA,
     agentB,
-    templateA,
-    templateB,
     difficulty,
-    delay,
     seed: seed >>> 0,
     roundSeconds,
     bestOf,

@@ -20,11 +20,11 @@ function putInAir(game, index = 0, height = 72) {
   return fighter;
 }
 
-assert(CHARACTER_TEMPLATES.vanguard && CHARACTER_TEMPLATES.ember, "both character templates should be exported");
+assert.deepEqual(Object.keys(CHARACTER_TEMPLATES), ["vanguard"], "only the single character should be exported");
 
 const templateGame = createGame({ playerTemplate: "vanguard", aiTemplate: "ember" });
 assert.equal(templateGame.fighters[0].templateId, "vanguard");
-assert.equal(templateGame.fighters[1].templateId, "ember");
+assert.equal(templateGame.fighters[1].templateId, "vanguard", "removed template inputs must normalize to 苍流");
 
 const airLightGame = createGame();
 putInAir(airLightGame);
@@ -52,20 +52,7 @@ step(tatsuGame, { ...neutral(), down: true });
 step(tatsuGame, { ...neutral(), down: true, left: true });
 step(tatsuGame, { ...neutral(), left: true });
 step(tatsuGame, { ...neutral(), left: true, heavy: true });
-assert.equal(tatsuGame.fighters[0].action, "airTatsu", "air QCB + K should start Vanguard's spin kick");
-
-const hammerGame = createGame({ playerTemplate: "ember" });
-putInAir(hammerGame, 0, 105);
-step(hammerGame, { down: true, hp: true });
-assert.equal(hammerGame.fighters[0].action, "narakuOtoshi", "air down + HP should start Ember's downward strike");
-
-const emberQcf = createGame({ playerTemplate: "ember" });
-step(emberQcf, { ...neutral(), down: true });
-step(emberQcf, { ...neutral(), down: true, right: true });
-step(emberQcf, { ...neutral(), right: true });
-step(emberQcf, { right: true, lp: true });
-assert.equal(emberQcf.fighters[0].action, "aragami", "Ember QCF+LP should become an advancing rekka, not a projectile");
-assert.equal(emberQcf.projectiles.length, 0);
+assert.equal(tatsuGame.fighters[0].action, "airTatsu", "air QCB + K should start 苍流's spin kick");
 
 const hitGame = createGame();
 hitGame.fighters[0].x = 560;
@@ -84,4 +71,4 @@ assert.equal(landingGame.fighters[0].onGround, true, "air attack should eventual
 assert(!landingGame.fighters[0].action.startsWith("air"), "landing should leave the air attack state");
 assert(Number.isFinite(landingGame.fighters[0].x) && Number.isFinite(landingGame.fighters[0].y));
 
-process.stdout.write("air combat ok · 2 templates + 4 air attacks + landing\n");
+process.stdout.write("air combat ok · single character + air attacks + landing\n");

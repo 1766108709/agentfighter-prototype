@@ -177,6 +177,7 @@ function testRunnerPolicies() {
   const game = createGame({ bestOf: 1, roundSeconds: 10 });
   for (const options of [
     { observationDelayFrame: 3 },
+    { observationDelayFrames: 0 },
     { observationDelayFrames: 1.5 },
     { decisionIntervalFrames: "2" },
     { deadlineMs: -1 },
@@ -189,6 +190,14 @@ function testRunnerPolicies() {
       `invalid runner option must fail closed: ${JSON.stringify(options)}`,
     );
   }
+  assert.throws(
+    () => createInProcessAgentRunner(
+      { act: () => createActionV1() },
+      { observationDelayFrames: 1 },
+    ),
+    /取消|removed/i,
+    "positive SDK delay must fail with an explicit migration error",
+  );
   let calls = 0;
   const agent = {
     name: "interval-agent",
@@ -272,7 +281,7 @@ function testRunnerPolicies() {
   assert.equal(asyncRunner.getDiagnostics()[0].kind, "async-action");
 }
 
-function testPlatformObservationDelay() {
+function testRealtimePlatformObservation() {
   const game = createGame({ bestOf: 1, roundSeconds: 10 });
   const perceptions = [];
   const runner = createInProcessAgentRunner({
@@ -285,7 +294,7 @@ function testPlatformObservationDelay() {
       });
       return createActionV1();
     },
-  }, { observationDelayFrames: 3 });
+  });
   runner.reset(createMatchInfoV1(game, 0));
 
   for (let frame = 0; frame <= 8; frame += 1) {
@@ -296,24 +305,35 @@ function testPlatformObservationDelay() {
   }
   assert.deepEqual(
     perceptions.map((entry) => entry.opponentFrame),
-    [0, 0, 0, 0, 1, 2, 3, 4, 5],
-    "opponent perception must use the earliest snapshot until N-delay is available",
+    [0, 1, 2, 3, 4, 5, 6, 7, 8],
+    "opponent perception must stay on the current simulation frame",
   );
   assert.deepEqual(perceptions.map((entry) => entry.decisionFrame), [0, 1, 2, 3, 4, 5, 6, 7, 8]);
   assert.deepEqual(perceptions.map((entry) => entry.selfX), [100, 101, 102, 103, 104, 105, 106, 107, 108]);
-  assert.equal(perceptions.at(-1).opponentX, 505, "opponent state must be delayed while self stays current");
+  assert.equal(perceptions.at(-1).opponentX, 508, "opponent state must be current alongside self state");
   assert.equal(runner.getLastDecision().decisionFrame, 8);
-  assert.equal(runner.getLastDecision().observedFrame, 5);
-  assert.equal(runner.getLastDecision().opponentObservedFrame, 5);
-  assert.equal(runner.getLastDecision().observationFrame, 5, "legacy metadata alias must mean observed frame");
-  assert.equal(runner.observationDelayFrames, 3);
+  assert.equal(runner.getLastDecision().observedFrame, 8);
+  assert.equal(runner.getLastDecision().opponentObservedFrame, 8);
+  assert.equal(runner.getLastDecision().observationFrame, 8, "legacy metadata alias must mean current frame");
+  assert.equal(Object.hasOwn(runner, "observationDelayFrames"), false);
+
+  const delayedObservation = {
+    ...createObservationV1(game, 0),
+    frame: 8,
+    perception: { delayFrames: 3, opponentFrame: 5 },
+  };
+  assert.throws(
+    () => runner.act(delayedObservation),
+    /real-time/i,
+    "direct runner.act calls must reject delayed or forged observations",
+  );
 
   game.roundNumber = 2;
   game.round = 2;
   game.frame = 20;
   game.fighters[1].x = 900;
   runner.decide(game, 0);
-  assert.equal(perceptions.at(-1).opponentFrame, 20, "round transition must clear the perception ring");
+  assert.equal(perceptions.at(-1).opponentFrame, 20, "round transition must remain on the current frame");
   assert.equal(perceptions.at(-1).opponentX, 900);
   assert.equal(runner.getLastDecision().decisionFrame, 20);
   assert.equal(runner.getLastDecision().observedFrame, 20);
@@ -373,7 +393,6 @@ function testSafeRecentEventsAndAdapter() {
   const scriptAgent = createScriptAIAgent({
     preset: "balanced",
     difficulty: "normal",
-    observationDelayFrames: 0,
     seed: 41,
   });
   scriptAgent.reset(createMatchInfoV1(game, 0));
@@ -383,7 +402,7 @@ function testSafeRecentEventsAndAdapter() {
   assert.equal(habits.samples, 9);
 }
 
-function testRecentEventsRespectPlatformDelay() {
+function testRecentEventsAreRealtime() {
   const game = createGame({ bestOf: 1, roundSeconds: 10 });
   game.combatEvents = [];
   const visibility = [];
@@ -396,7 +415,7 @@ function testRecentEventsRespectPlatformDelay() {
       });
       return createActionV1();
     },
-  }, { observationDelayFrames: 3 });
+  });
   runner.reset(createMatchInfoV1(game, 0));
 
   for (let frame = 0; frame <= 8; frame += 1) {
@@ -412,10 +431,10 @@ function testRecentEventsRespectPlatformDelay() {
     }
     runner.decide(game, 0);
   }
-  assert(visibility.slice(0, 7).every((entry) => entry.sawThrowTech === false));
-  assert.equal(visibility[7].decisionFrame, 7);
-  assert.equal(visibility[7].observedFrame, 4);
-  assert.equal(visibility[7].sawThrowTech, true, "event must appear only when its delayed snapshot becomes legal");
+  assert(visibility.slice(0, 4).every((entry) => entry.sawThrowTech === false));
+  assert.equal(visibility[4].decisionFrame, 4);
+  assert.equal(visibility[4].observedFrame, 4);
+  assert.equal(visibility[4].sawThrowTech, true, "event must appear on the frame it becomes public");
 }
 
 function createCustomAgent(name, lifecycle, { invalidAt = -1 } = {}) {
@@ -450,18 +469,14 @@ function createCustomAgent(name, lifecycle, { invalidAt = -1 } = {}) {
 function testCustomHeadlessAgents() {
   const a = { resets: [], ends: [], observations: 0, observedFrames: [], opponentFrames: [] };
   const b = { resets: [], ends: [], observations: 0, observedFrames: [], opponentFrames: [] };
-  const observationDelayFrames = 4;
   let decisionHooks = 0;
   let replayFromHook = null;
   const summary = runHeadlessTournament({
     matches: 1,
     agentA: "balanced",
     agentB: "zoner",
-    templateA: "vanguard",
-    templateB: "ember",
     roundSeconds: 10,
     bestOf: 1,
-    delay: observationDelayFrames,
     seed: 73,
     maxFramesPerMatch: 1_200,
   }, {
@@ -476,14 +491,19 @@ function testCustomHeadlessAgents() {
       assert(frame.decisions.A && frame.decisions.B, "decision hook must expose both decisions");
       assert.equal(frame.decisions.A.decisionFrame, frame.frame);
       assert.equal(frame.decisions.B.decisionFrame, frame.frame);
-      assert.equal(frame.decisions.A.observedFrame, Math.max(0, frame.frame - observationDelayFrames));
-      assert.equal(frame.decisions.B.observedFrame, Math.max(0, frame.frame - observationDelayFrames));
+      assert.equal(frame.decisions.A.observedFrame, frame.frame);
+      assert.equal(frame.decisions.B.observedFrame, frame.frame);
     },
   });
 
   assert.equal(summary.matches, 1);
   assert.equal(summary.participants.A.name, "custom-A");
   assert.equal(summary.participants.B.name, "custom-B");
+  assert.deepEqual(summary.templates, { A: "vanguard", B: "vanguard" });
+  assert.equal(summary.participants.A.template, "vanguard");
+  assert.equal(summary.participants.B.template, "vanguard");
+  assert.equal(Object.hasOwn(summary.settings, "templateA"), false);
+  assert.equal(Object.hasOwn(summary.settings, "templateB"), false);
   assert.equal(summary.participants.A.source, "injected");
   assert.equal(summary.determinism.agents, "unverified");
   assert(summary.totalFrames > 0);
@@ -502,11 +522,12 @@ function testCustomHeadlessAgents() {
     b.observedFrames,
     "both custom Agents must receive the same current decision frame",
   );
-  assert.deepEqual(a.opponentFrames, b.opponentFrames, "both custom Agents must receive the same opponent delay");
+  assert.deepEqual(a.opponentFrames, b.opponentFrames, "both custom Agents must receive the same current opponent frame");
   for (let index = 0; index < a.opponentFrames.length; index += 1) {
     assert.equal(a.observedFrames[index], index);
-    assert.equal(a.opponentFrames[index], Math.max(0, index - observationDelayFrames));
+    assert.equal(a.opponentFrames[index], index);
   }
+  assert.equal(Object.hasOwn(summary.settings, "delay"), false, "headless summaries must not advertise a removed delay rule");
   assert.equal(summary.diagnostics.A.total, 0);
   assert.equal(summary.diagnostics.B.byKind["invalid-action"], 1);
   assert.equal(summary.diagnostics.B.failedMatches, 1);
@@ -532,6 +553,11 @@ function testCustomHeadlessAgents() {
     Object.values(summary.actions.B).some((count) => count > 0),
     "custom B must produce a recognized combat action",
   );
+  assert.throws(
+    () => runHeadlessTournament({ matches: 1, templateA: "ember" }),
+    /templateA\/templateB.*removed/i,
+    "legacy dual-template tournament options must fail with a migration error",
+  );
 }
 
 function testFrameLimitReplayAtRoundBoundary() {
@@ -546,7 +572,6 @@ function testFrameLimitReplayAtRoundBoundary() {
     bestOf: 3,
     roundSeconds: 10,
     maxFramesPerMatch: 600,
-    delay: 0,
     seed: 8080,
   }, {
     agents: { A: makeNeutral("neutral-A"), B: makeNeutral("neutral-B") },
@@ -572,10 +597,10 @@ testObservationBoundary();
 testActionValidation();
 testHostileActionDescriptors();
 testRunnerPolicies();
-testPlatformObservationDelay();
+testRealtimePlatformObservation();
 testSafeRecentEventsAndAdapter();
-testRecentEventsRespectPlatformDelay();
+testRecentEventsAreRealtime();
 testCustomHeadlessAgents();
 testFrameLimitReplayAtRoundBoundary();
 
-process.stdout.write("agent-sdk ok · schemas, masking, safe events, fair delay, policies, custom headless agents\n");
+process.stdout.write("agent-sdk ok · schemas, masking, realtime observations, policies, custom headless agents\n");

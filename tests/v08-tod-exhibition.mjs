@@ -14,8 +14,8 @@ function makeShowcase(maxHealth = 1000) {
     bestOf: 1,
     roundSeconds: 30,
     players: [
-      { templateId: "ember", startingSuperMeter: 500 },
-      { templateId: "ember", maxHealth },
+      { templateId: "vanguard", startingSuperMeter: 300 },
+      { templateId: "vanguard", maxHealth },
     ],
   });
   prepareTodExhibition(game);
@@ -53,6 +53,8 @@ function damagingContacts(game) {
   assert.equal(state.success, true);
   assert.equal(proof.success, true);
   assert.equal(proof.legalResourceRoute, true);
+  assert.equal(proof.quickMaxStart.resourceCost.drive, 600);
+  assert.equal(proof.yakumoStart.resourceCost.super, 300);
   assert.equal(proof.authoredStarter, true);
   assert.equal(proof.hits, 16);
   assert.equal(proof.damage, 1000);
@@ -110,4 +112,4 @@ function damagingContacts(game) {
   assert.equal(game.telemetry.tods[0], 0);
 }
 
-process.stdout.write("v0.8 TOD exhibition ok · 16-hit natural kill + 1100/900 HP controls\n");
+process.stdout.write("v0.8 苍流 TOD exhibition ok · 16-hit natural kill + 1100/900 HP controls\n");

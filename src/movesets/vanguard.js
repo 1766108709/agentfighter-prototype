@@ -41,6 +41,19 @@ const cancel = (type, windows, extra = {}) => ({
 const C_INTO = ["special", "od", "driveImpact", "driveRushCancel", "super"];
 const SA2_INTO = ["super2", "super3", "criticalArt"];
 const SA3_INTO = ["super3", "criticalArt"];
+const TOD_CINEMATIC_GAPS = Object.freeze([2, 2, 2, 1, 1, 1, 1, 2, 1, 1, 2, 3, 0]);
+const TOD_CINEMATIC_HITSTOP = Object.freeze([8, 5, 5, 4, 4, 4, 4, 5, 4, 4, 5, 7, 14]);
+
+function cinematicWindows(startup, gaps) {
+  let cursor = startup;
+  return gaps.map((gapAfter, index) => {
+    const id = index === 0 ? "hit1" : `scriptedHit${index + 1}`;
+    const frames = index === 0 || index === gaps.length - 1 ? 2 : 1;
+    const window = W(id, cursor, cursor + frames - 1);
+    cursor = window.end + 1 + gapAfter;
+    return window;
+  });
+}
 
 function authoredMove({
   id,
@@ -851,6 +864,75 @@ const MOVES = [
     cancelStartupOverride: { from: "shoryukenHeavy", startup: 2 },
   }),
 
+  // 苍流满资源爆发路线 ----------------------------------------------------
+  // This four-step route belongs to the sole playable character.  Its raw
+  // damage is expressed on the same 10,000-point scale as the rest of the
+  // Vanguard table, then converted by the engine's 0.1 health scale.
+  authoredMove({
+    id: "closeC", name: "苍流·近身重拳", category: "normal",
+    command: CMD("近身 HP", ["hp"], { stance: "close" }),
+    startup: 4, activeWindows: [W("main", 4, 6)], recovery: 19, damage: 700,
+    hit: ADV(-1), block: ADV(-3),
+    cancel: cancel("TOD route", [cancelWindow(4, 6, ["commandNormal"], {
+      moves: ["shiki88Canceled"],
+    })]),
+    juggle: J(1, 1, 0), tags: ["close", "heavy", "todStarter"], animation: "highHeavy",
+    proximity: "close",
+  }),
+  authoredMove({
+    id: "shiki88Canceled", name: "苍流·双断踢", category: "commandNormal",
+    command: CMD("近身 HP > 3HK", ["hk"], { direction: "downForward" }),
+    startup: 11,
+    activeWindows: [W("low", 11, 12), W("mid", 19, 20)],
+    recovery: 21, damage: 700, hitLevel: "low",
+    hits: [
+      H("low", 11, 12, 300, { hitLevel: "low", juggleCost: 1, juggleLimit: 0 }),
+      H("mid", 19, 20, 400, { hitLevel: "high", juggleCost: 1, juggleLimit: 0 }),
+    ],
+    hit: ADV(-8), block: ADV(-10),
+    cancel: cancel("TOD route", [cancelWindow(11, 20, ["system"], {
+      moves: ["quickMax"],
+    })]),
+    juggle: J([1, 1], [1, 1], [0, 0]),
+    tags: ["low", "multiHit", "todRoute"], animation: "lowHeavy",
+    followupFrom: "closeC",
+  }),
+  authoredMove({
+    id: "quickMax", name: "苍流·极限解放", category: "system",
+    command: CMD("命中时 LK+HP", ["lk", "hp"], { chord: true }),
+    startup: 1, activeWindows: [W("activation", 1)], recovery: 0, totalFrames: 1,
+    damage: 0, hitLevel: "none", hit: ADV(null, { state: "maxMode" }), block: ADV(null),
+    resource: resource({ drive: 600 }, { label: "全部 6 Drive" }),
+    juggle: J(), tags: ["quickMax", "nonAttack", "normalCancelRoute", "todCore"], animation: "idle",
+    maxModeFrames: 600,
+  }),
+  authoredMove({
+    id: "yakumo", name: "苍流奥义·天穹十三式", category: "climax",
+    command: CMD("214236HP+HK", ["hp", "hk"], { motion: "qcbHcf", chord: true }),
+    startup: 11, activeWindows: cinematicWindows(11, TOD_CINEMATIC_GAPS),
+    recovery: 45, damage: 4400, hitLevel: "high",
+    hits: [900, 600, 600, 300, 300, 300, 300, 300, 300, 300, 300, 300, 300].map((damage, index) => {
+      const window = cinematicWindows(11, TOD_CINEMATIC_GAPS)[index];
+      const terminal = index === TOD_CINEMATIC_GAPS.length - 1;
+      return H(window.hitId, window.start, window.end, damage, {
+        hitLevel: "high",
+        hitstop: TOD_CINEMATIC_HITSTOP[index],
+        knockback: terminal ? 4 : 0,
+        knockdownType: terminal ? "hard" : undefined,
+        juggleCost: terminal ? 1 : 0,
+        juggleLimit: 99,
+        minimumScaling: 0.4,
+      });
+    }),
+    hit: ADV(null, { state: "hardKnockdown", scriptedCinematic: true }),
+    block: ADV(-24),
+    resource: resource({ super: 300 }, { conditions: ["maxModeFrames>0"], label: "3 Super · 极限解放中" }),
+    knockdown: KD("hard", { advantage: 35 }), juggle: J(1, 1, 99),
+    tags: ["super", "cinematic", "multiHit", "hardKnockdown", "maxModeClimaxFinisher", "todFinisher"],
+    animation: "rekkaHeavy", condition: "maxMode", minimumScaling: 0.4,
+    maxModeDamageMultiplier: 2.125,
+  }),
+
   // Universal Drive / movement rows ---------------------------------------
   authoredMove({
     id: "forwardDash", name: "Forward Dash", category: "system",
@@ -996,8 +1078,7 @@ const MOVES = [
 
 export const VANGUARD_MOVESET = defineMoveset({
   id: "vanguard",
-  name: "Vanguard",
-  archetype: "fundamentals / shoto",
+  name: "苍流",
   controlLayout: "sixButton",
   resourceModel: "vanguard",
   aliases: {

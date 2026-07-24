@@ -71,7 +71,7 @@ function observation({ frame = 0, gap = 58, facing = 1, phase = "fighting", self
     timerFrames: 3600 - frame,
     side: facing > 0 ? "left" : "right",
     selfIndex: facing > 0 ? 0 : 1,
-    perception: { delayFrames: 12, opponentFrame: Math.max(0, frame - 12) },
+    perception: { delayFrames: 0, opponentFrame: frame },
     round: { number: 1, score: { self: 0, opponent: 0 } },
     arena: { width: 960, height: 540, floorY: 460, left: 48, right: 912 },
     self,

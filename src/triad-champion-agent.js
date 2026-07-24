@@ -33,41 +33,12 @@ const PUBLIC_FRAME_TABLE = new Map([
   ["tatsuMedium", frameData(14, 17, "high", "special", 164)],
   ["tatsuHeavy", frameData(16, 32, "high", "special", 182)],
   ["driveImpact", frameData(26, 2, "high", "system", 126)],
-  ["closeA", frameData(4, 2, "mid", "normal", 74)],
-  ["farA", frameData(6, 2, "mid", "normal", 112)],
-  ["closeC", frameData(4, 3, "mid", "normal", 83)],
-  ["farC", frameData(10, 3, "mid", "normal", 139)],
-  ["crouchA", frameData(4, 3, "mid", "normal", 76)],
-  ["crouchB", frameData(5, 3, "low", "normal", 78)],
-  ["crouchC", frameData(7, 4, "mid", "normal", 108)],
-  ["sweep", frameData(7, 4, "low", "normal", 143)],
-  ["blowbackGround", frameData(16, 5, "mid", "commandNormal", 132)],
-  ["hatsugane", frameData(1, 1, "throw", "throw", 50)],
-  ["issetsuSeoiNage", frameData(1, 1, "throw", "throw", 50)],
-  ["oniyakiLight", frameData(4, 9, "mid", "special", 116)],
-  ["oniyakiHeavy", frameData(7, 15, "mid", "special", 124)],
-  ["oniyakiEx", frameData(4, 30, "mid", "od", 130)],
-  ["kaiLight", frameData(15, 4, "mid", "special", 153)],
-  ["kaiHeavy", frameData(20, 5, "mid", "special", 174)],
-  ["aragami", frameData(11, 6, "mid", "special", 133)],
-  ["konokizu", frameData(9, 8, "mid", "targetCombo", 130)],
-  ["yanosabi2", frameData(24, 4, "overhead", "targetCombo", 125)],
-  ["munotsuchi", frameData(21, 2, "low", "targetCombo", 124)],
-  ["dokugami", frameData(18, 6, "mid", "special", 142)],
-  ["kototsukiYoLight", frameData(15, 3, "mid", "special", 172)],
-  ["kototsukiYoHeavy", frameData(15, 3, "mid", "special", 183)],
-  ["kototsukiYoEx", frameData(3, 1, "throw", "od", 63)],
-  ["shatterStrike", frameData(15, 6, "mid", "system", 142)],
-  ["advanceStrike", frameData(28, 6, "mid", "system", 169)],
 ]);
 
 const MOTION_STEPS = Object.freeze({
   qcf: ["down", "downForward", "forward"],
-  qcb: ["down", "downBack", "back"],
   dp: ["forward", "down", "downForward"],
-  hcb: ["forward", "down", "back"],
   qcfQcf: ["down", "downForward", "forward", "down", "downForward", "forward"],
-  qcbHcf: ["down", "downBack", "back", "down", "downForward", "forward"],
 });
 
 const DEFAULT_TUNING = Object.freeze({
@@ -98,7 +69,6 @@ export function createTriadChampionAgent(options = {}) {
   let queue = [];
   let lastRound = 0;
   let lastFrame = -1;
-  let selfTemplate = "unknown";
   let mode = "ready";
   let lastCommand = "neutral";
   let framesActed = 0;
@@ -114,7 +84,6 @@ export function createTriadChampionAgent(options = {}) {
     queue = [];
     lastRound = 0;
     lastFrame = -1;
-    selfTemplate = "unknown";
     mode = "ready";
     lastCommand = "neutral";
     framesActed = 0;
@@ -128,8 +97,6 @@ export function createTriadChampionAgent(options = {}) {
 
   function act(observation) {
     framesActed += 1;
-    selfTemplate = text(observation?.self?.templateId, selfTemplate);
-
     if (!observation || observation.phase !== "fighting") {
       flushQueue("inactive");
       return createActionV1();
@@ -172,12 +139,8 @@ export function createTriadChampionAgent(options = {}) {
       if (projectile.framesAway > 11 && gap > tuning.pokeGap && random() < 0.22) {
         return actionFor(observation, "upForward");
       }
-      if (isVanguard(self) && self.resources.drive >= 120 && random() < 0.3) {
+      if (self.resources.drive >= 120 && random() < 0.3) {
         return actionFor(observation, "neutral", { system1: true });
-      }
-      if (!isVanguard(self)) {
-        startNormal("forward", "system1", "projectile-roll");
-        return nextQueuedAction(observation);
       }
       return actionFor(observation, "downBack", { guard: true });
     }
@@ -186,7 +149,7 @@ export function createTriadChampionAgent(options = {}) {
       flushQueue("anti-air");
       mode = "anti-air";
       if (isActionable(self)) {
-        if (isVanguard(self) && self.resources.drive >= 200 && random() < tuning.resourceRate) {
+        if (self.resources.drive >= 200 && random() < tuning.resourceRate) {
           startMotion("dp", ["lp", "mp"], "od-anti-air");
         } else {
           startMotion("dp", ["lp"], "anti-air");
@@ -201,7 +164,7 @@ export function createTriadChampionAgent(options = {}) {
       if (queue.length > 0) return nextQueuedAction(observation);
       if (gap < tuning.pokeGap + 25) {
         lastCommand = "air-strike";
-        return actionFor(observation, "forward", isVanguard(self) ? { hk: true } : { hp: true });
+        return actionFor(observation, "forward", { hk: true });
       }
       return actionFor(observation, "forward");
     }
@@ -211,10 +174,8 @@ export function createTriadChampionAgent(options = {}) {
       flushQueue("threat");
       mode = "defending";
       if (isActionable(self) && threat.canReversal && random() < tuning.reversalRate) {
-        if (isVanguard(self) && self.resources.drive >= 200) {
+        if (self.resources.drive >= 200) {
           startMotion("dp", ["lp", "mp"], "od-reversal");
-        } else if (!isVanguard(self) && self.resources.super >= 50) {
-          startMotion("dp", ["lp", "hp"], "ex-reversal");
         } else {
           startMotion("dp", ["lp"], "reversal");
         }
@@ -239,18 +200,14 @@ export function createTriadChampionAgent(options = {}) {
     if (shouldRetreat(observation, gap)) {
       mode = "life-lead";
       if (gap < tuning.farGap) return actionFor(observation, "back", { guard: true });
-      if (isVanguard(self) && random() < 0.42) {
+      if (random() < 0.42) {
         startMotion("qcf", ["lp"], "life-lead-projectile");
         return nextQueuedAction(observation);
       }
       return actionFor(observation, "downBack", { guard: true });
     }
 
-    if (isVanguard(self)) {
-      chooseVanguard(observation, gap);
-    } else {
-      chooseEmber(observation, gap);
-    }
+    chooseVanguard(observation, gap);
     return queue.length > 0 ? nextQueuedAction(observation) : createActionV1();
   }
 
@@ -320,61 +277,13 @@ export function createTriadChampionAgent(options = {}) {
     else startNormal("down", "lk", "low-check");
   }
 
-  function chooseEmber(observation, gap) {
-    const { self, opponent } = observation;
-    if (gap > tuning.farGap) {
-      mode = "closing";
-      const roll = random();
-      if (roll < tuning.jumpRate * 1.8) startJumpIn("hp", "jump-in");
-      else if (roll < 0.38) startMotion("qcf", ["lk"], "advancing-kick");
-      else startDash("forward", "run-in");
-      return;
-    }
-
-    if (gap > tuning.pokeGap) {
-      mode = "mid-range";
-      const roll = random();
-      if (roll < 0.24) startJumpIn("hp", "jump-in");
-      else if (roll < 0.54) startNormal("neutral", "hp", "far-heavy");
-      else if (roll < 0.76) startMotion("qcf", ["lk"], "kai");
-      else startDash("forward", "run-in");
-      return;
-    }
-
-    if (gap > tuning.closeGap) {
-      mode = "footsies";
-      const roll = random();
-      if (roll < 0.38) startNormal("down", "hk", "sweep");
-      else if (roll < 0.72) startNormal("neutral", "hp", "heavy-poke");
-      else startMotion("qcf", ["lp"], "rekka-entry");
-      return;
-    }
-
-    mode = "close-range";
-    const guarded = opponent.state.blockstunFrames > 0 || actionLooksDefensive(opponent.state.action);
-    const throwBoost = guarded ? 0.2 : 0;
-    const roll = random();
-    if (roll < tuning.throwRate + throwBoost) startNormal("forward", "throw", "throw");
-    else if (roll < 0.76) startEmberHeavyConfirm();
-    else if (self.resources.super >= 50 && roll < 0.86) startMotion("hcb", ["lk", "hk"], "ex-command-grab");
-    else startEmberLowConfirm();
-  }
-
   function startPunish(observation, gap) {
-    if (isVanguard(observation.self)) {
-      if (observation.self.resources.super >= 100 && gap < tuning.closeGap && random() < tuning.resourceRate) {
-        startMotion("qcfQcf", ["hp"], "super-punish");
-      } else if (gap < tuning.closeGap + 12) {
-        startVanguardHeavyConfirm();
-      } else {
-        startLowFireballConfirm();
-      }
-    } else if (observation.self.resources.super >= 100 && gap < tuning.closeGap && random() < tuning.resourceRate) {
-      startEmberHeavySuperConfirm();
+    if (observation.self.resources.super >= 100 && gap < tuning.closeGap && random() < tuning.resourceRate) {
+      startMotion("qcfQcf", ["hp"], "super-punish");
     } else if (gap < tuning.closeGap + 12) {
-      startEmberHeavyConfirm();
+      startVanguardHeavyConfirm();
     } else {
-      startNormal("neutral", "hp", "far-heavy-punish");
+      startLowFireballConfirm();
     }
   }
 
@@ -406,46 +315,6 @@ export function createTriadChampionAgent(options = {}) {
       step("downForward"),
       step("forward", { lp: true }),
       wait(2),
-    ]);
-  }
-
-  function startEmberHeavyConfirm() {
-    begin("heavy-rekka-confirm", [
-      step("neutral", { hp: true }),
-      step("down"),
-      step("downForward"),
-      step("forward", { lp: true }),
-      wait(7),
-      step("down"),
-      step("downForward"),
-      step("forward", { lp: true }),
-      wait(7),
-      step("neutral", { lk: true }),
-      wait(2),
-    ]);
-  }
-
-  function startEmberLowConfirm() {
-    begin("low-confirm", [
-      step("down", { lk: true }),
-      wait(2),
-      step("down", { lp: true }),
-      step("down"),
-      step("downForward"),
-      step("forward", { lp: true }),
-      wait(3),
-    ]);
-  }
-
-  function startEmberHeavySuperConfirm() {
-    begin("heavy-super-confirm", [
-      step("neutral", { hp: true }),
-      step("down"),
-      step("downForward"),
-      step("forward", { lp: true }),
-      wait(7),
-      ...motionEntries("qcfQcf", ["lp"]),
-      wait(3),
     ]);
   }
 
@@ -519,7 +388,6 @@ export function createTriadChampionAgent(options = {}) {
   function debugState() {
     return Object.freeze({
       version: 1,
-      selfTemplate,
       mode,
       lastCommand,
       queueDepth: queue.length,
@@ -577,8 +445,7 @@ function defensiveAction(observation, gap, explicitHitLevel = null) {
 
 function shouldGuardCancel(self, opponent, gap) {
   if (gap > 105 || opponent.state.phase === "recovery") return false;
-  if (isVanguard(self)) return self.resources.drive >= 260 && self.resources.guard < self.resources.guardMax * 0.42;
-  return self.resources.super >= 100 && self.resources.guard < self.resources.guardMax * 0.38;
+  return self.resources.drive >= 260 && self.resources.guard < self.resources.guardMax * 0.42;
 }
 
 function shouldRetreat(observation, gap) {
@@ -651,10 +518,6 @@ function isActionable(fighter) {
   if (!fighter.onGround) return false;
   if (fighter.state.hitstunFrames > 0 || fighter.state.blockstunFrames > 0 || fighter.state.knockdownFrames > 0) return false;
   return fighter.state.phase === "idle" || ["idle", "walk", "crouch", "guard"].includes(fighter.state.action);
-}
-
-function isVanguard(fighter) {
-  return fighter.templateId === "vanguard";
 }
 
 function edgeGap(left, right) {

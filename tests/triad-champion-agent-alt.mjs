@@ -9,10 +9,10 @@ const ACTION_KEYS = [
   "throw", "system1", "system2", "guard",
 ];
 
-function fighter(templateId, x, facing) {
+function fighter(x, facing) {
   return {
     relation: "self",
-    templateId,
+    templateId: "vanguard",
     position: { x, y: 0 },
     velocity: { x: 0, y: 0 },
     size: { width: 48, height: 96 },
@@ -48,9 +48,9 @@ function fighter(templateId, x, facing) {
   };
 }
 
-function observation(templateId = "vanguard") {
-  const self = fighter(templateId, 180, 1);
-  const opponent = fighter(templateId === "vanguard" ? "ember" : "vanguard", 620, -1);
+function observation() {
+  const self = fighter(180, 1);
+  const opponent = fighter(620, -1);
   opponent.relation = "opponent";
   return {
     schema: "agentfighter.observation",
@@ -62,7 +62,7 @@ function observation(templateId = "vanguard") {
     timerFrames: 3600,
     side: "left",
     selfIndex: 0,
-    perception: { delayFrames: 12, opponentFrame: 0 },
+    perception: { delayFrames: 0, opponentFrame: 1 },
     round: { number: 1, score: { self: 0, opponent: 0 } },
     arena: { width: 960, height: 540, floorY: 450, left: 0, right: 960 },
     self,
@@ -82,21 +82,21 @@ function assertAction(action) {
 }
 
 {
-  const agent = createAgent("vanguard");
+  const agent = createAgent();
   agent.reset({ self: { templateId: "vanguard" } });
-  const action = agent.act(observation("vanguard"));
+  const action = agent.act(observation());
   assertAction(action);
 }
 
 {
-  const agent = createAgent("ember");
-  agent.reset({ self: { templateId: "ember" } });
-  const view = observation("ember");
+  const agent = createAgent();
+  agent.reset({ self: { templateId: "vanguard" } });
+  const view = observation();
   view.projectiles.push({
     id: 1,
     owner: "opponent",
     sourceMoveId: "hadokenLight",
-    position: { x: 500, y: 410 },
+    position: { x: 230, y: 410 },
     velocity: { x: -8, y: 0 },
     size: { width: 20, height: 20, radius: 10 },
     facing: -1,
@@ -105,8 +105,12 @@ function assertAction(action) {
   });
   const action = agent.act(view);
   assertAction(action);
-  assert.equal(action.input.right, true);
-  assert.equal(action.input.up, true);
+  assert.equal(action.input.left, true);
+  assert.equal(action.input.down, true);
+  assert.equal(action.input.mp, true);
+  assert.equal(action.input.mk, true);
+  assert.equal(action.input.system1, true);
+  assert.equal(action.input.guard, true);
 }
 
 {
@@ -114,6 +118,7 @@ function assertAction(action) {
   assert.doesNotMatch(source, /observation\?\.(?:game|raw)|observation\.(?:game|raw)/);
   assert.doesNotMatch(source, /opponent\.(?:templateId|name|preset|label|identity)/);
   assert.doesNotMatch(source, /info\?\.(?:seed|opponent)/);
+  assert.doesNotMatch(source, /ember|movesets\/ember/i);
 }
 
 console.log("triad champion alt tests passed");

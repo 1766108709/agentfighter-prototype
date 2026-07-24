@@ -54,7 +54,7 @@ function freshCloseGame(templateId = "vanguard", distance = 60) {
   const game = createGame({
     roundTimeSeconds: 30,
     playerTemplate: templateId,
-    aiTemplate: templateId === "vanguard" ? "ember" : "vanguard",
+    aiTemplate: "vanguard",
   });
   game.fighters[0].x = 560;
   game.fighters[1].x = 560 + distance;
@@ -94,8 +94,7 @@ function groundAttackResult({
 }
 
 function healthDamageScale(result) {
-  return MOVESETS[result.attacker.templateId].healthDamageScale
-    ?? (result.attacker.templateId === "vanguard" ? 0.1 : 1);
+  return MOVESETS[result.attacker.templateId].healthDamageScale ?? 0.1;
 }
 
 function firstHit(result) {
@@ -200,22 +199,11 @@ assert.equal(
 );
 assert.equal(fireballHeavy.totalFrames, 47, "Vanguard heavy fireball must take 47 total frames");
 
-assertFrameData("ember", "highLight", { startup: 4, active: 2, recovery: 8 });
-assertFrameData("ember", "lowHeavy", { startup: 7, active: 4, recovery: 23 });
-assertFrameData("ember", "rekkaLight", { startup: 11, active: 6, recovery: 21 });
-const emberAirHammer = getMoveData("ember", "airHammer");
-assert.deepEqual(
-  [emberAirHammer.startup, emberAirHammer.active, emberAirHammer.hit?.landingRecovery],
-  [12, 4, 1],
-  "Ember airHammer must retain 12F startup, 4F active, and 1F landing recovery",
-);
-assert.equal(emberAirHammer.firstActive, 11);
-
-assert(MOVESETS.vanguard && MOVESETS.ember, "MOVESETS must expose both authored templates");
-assert.notDeepEqual(
-  frameTriple(getMoveData("vanguard", "highLight")),
-  frameTriple(getMoveData("ember", "highLight")),
-  "the same action must resolve to template-specific frame data",
+assert.deepEqual(Object.keys(MOVESETS), ["vanguard"], "MOVESETS must expose only the single authored character");
+assert.equal(
+  getMoveData("ember", "highLight"),
+  getMoveData("vanguard", "highLight"),
+  "removed legacy template ids must normalize to the single character",
 );
 assert(MOVES && MOVES.highLight && MOVES.lowHeavy, "legacy MOVES actions must remain available");
 assert(MOVES.light && MOVES.heavy && MOVES.special, "legacy MOVES aliases must remain available");
@@ -245,29 +233,10 @@ assert(startupDefender.health < startupHealth, "highLight must hit on startup-1,
 // Guard matrix: true mids block at either height; overhead and low require the
 // correct height. High attacks only miss crouchers when the authored move is
 // tagged whiffsOnCrouch; ordinary standing punches remain crouch-blockable.
-assert.equal(getMoveData("ember", "rekkaLight").hitLevel, "mid");
 assert.equal(getMoveData("vanguard", "midLight").hitLevel, "overhead");
 assert.equal(getMoveData("vanguard", "lowLight").hitLevel, "low");
 assert.equal(getMoveData("vanguard", "highLight").hitLevel, "high");
 
-assertBlocked(
-  groundAttackResult({
-    templateId: "ember",
-    action: "rekkaLight",
-    attackInputs: qcfInputs("light"),
-    guardInput: { ...neutral(), guard: true },
-  }),
-  "standing guard against mid",
-);
-assertBlocked(
-  groundAttackResult({
-    templateId: "ember",
-    action: "rekkaLight",
-    attackInputs: qcfInputs("light"),
-    guardInput: { ...neutral(), down: true, guard: true },
-  }),
-  "crouching guard against mid",
-);
 assertHit(
   groundAttackResult({
     action: "lowLight",
@@ -321,7 +290,7 @@ assertHit(
 );
 
 // Public frame-data and collision snapshots must be renderer-independent.
-const structureGame = createGame({ playerTemplate: "vanguard", aiTemplate: "ember" });
+const structureGame = createGame({ playerTemplate: "vanguard", aiTemplate: "vanguard" });
 step(structureGame);
 assert(Array.isArray(structureGame.frameData), "game.frameData must be an array");
 assert.equal(structureGame.frameData.length, 2, "game.frameData must contain one record per fighter");
@@ -369,46 +338,14 @@ for (let frame = 0; frame < fireballLightProjectileFrame + 3 && projectileGame.p
 assert(projectileGame.projectiles.length > 0, "light fireball must create a projectile");
 validateBox(findBox(projectileGame, "projectile", 0), "projectile hitbox");
 
-// Ember DP has two active windows separated by frame 8. Move the defender in
-// only for the gap, then prove frame 9 becomes effective again.
+// The single character's DP is continuously active across its authored window.
 for (let frame = 5; frame <= 14; frame += 1) {
   assert(
     coversAuthoredFrame(vanguardDragonPunch, frame),
-    `Vanguard DP must have no inactive gap on authored frame ${frame}`,
+    `苍流 DP must have no inactive gap on authored frame ${frame}`,
   );
 }
-const emberDragonPunch = getMoveData("ember", "oniyakiLight");
-assert.deepEqual(
-  emberDragonPunch.activeWindows.map(({ start, end }) => ({ start, end })),
-  [{ start: 4, end: 7 }, { start: 9, end: 12 }],
-  "Ember DP must expose its two discrete active windows",
-);
-
-const gapGame = createGame({ playerTemplate: "ember", aiTemplate: "vanguard" });
-gapGame.fighters[1].x = 1000;
-step(gapGame, { right: true });
-step(gapGame, { down: true });
-step(gapGame, { down: true, right: true, lp: true });
-assert.equal(gapGame.fighters[0].action, "oniyakiLight");
-while (gapGame.fighters[0].actionFrame < 6) step(gapGame);
-
-const gapAttacker = gapGame.fighters[0];
-const gapDefender = gapGame.fighters[1];
-gapAttacker.x = 560;
-gapAttacker.prevY = gapAttacker.y;
-gapAttacker.vx = 0;
-gapDefender.x = 605;
-gapDefender.y = gapGame.arena.floorY;
-gapDefender.prevY = gapDefender.y;
-const gapHealth = gapDefender.health;
-
-step(gapGame);
-assert.equal(gapAttacker.actionFrame, 7, "action frame 7 must represent authored frame 8");
-assert.equal(gapDefender.health, gapHealth, "the frame-8 gap between active windows must not hit");
-step(gapGame);
-assert.equal(gapAttacker.actionFrame, 8, "action frame 8 must represent authored frame 9");
-assert(gapDefender.health < gapHealth, "the second active window must hit on frame 9");
 
 process.stdout.write(
-  "frame data ok · template moves + startup/guard semantics + public hitboxes + active windows\n",
+  "frame data ok · single-character moves + startup/guard semantics + public hitboxes + active windows\n",
 );

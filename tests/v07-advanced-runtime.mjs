@@ -9,22 +9,12 @@ function vanguardGame() {
     bestOf: 1,
     players: [
       { templateId: "vanguard", startingSuperMeter: 300 },
-      { templateId: "ember", startingSuperMeter: 0 },
+      { templateId: "vanguard", startingSuperMeter: 0 },
     ],
   });
   game.fighters[0].x = 500;
   game.fighters[1].x = 560;
   return game;
-}
-
-function emberGame() {
-  return createGame({
-    bestOf: 1,
-    players: [
-      { templateId: "ember", startingSuperMeter: 500 },
-      { templateId: "vanguard", startingSuperMeter: 0 },
-    ],
-  });
 }
 
 function qcbQcb(game, buttons = { hp: true }) {
@@ -36,19 +26,6 @@ function qcbQcb(game, buttons = { hp: true }) {
     { down: true, left: true },
     { left: true },
     { left: true, ...buttons },
-  ]) step(game, input);
-}
-
-function qcbHcf(game, buttons = { hp: true }) {
-  for (const input of [
-    { down: true },
-    { down: true, left: true },
-    { left: true },
-    { down: true, left: true },
-    { down: true },
-    { down: true, right: true },
-    { right: true },
-    { right: true, ...buttons },
   ]) step(game, input);
 }
 
@@ -115,24 +92,6 @@ function moveStarts(game, moveId) {
   assert.equal(denjin.fighters[0].superMeter, 100);
 }
 
-// KOF-style held supers derive their damage tier from real held frames while
-// charging and retain a single meter transaction.
-{
-  const game = emberGame();
-  qcbHcf(game);
-  for (let index = 0; index < 24; index += 1) step(game, { hp: true });
-  assert.equal(game.fighters[0].movePhase, "charge");
-  assert.equal(game.fighters[0].invulnFrames, 0, "full-body startup invulnerability must expire normally");
-  assert(game.fighters[0].strikeInvulnFrames > 0, "authored upper-body charge invulnerability must remain active while held");
-  for (let index = 24; index < 130 && game.fighters[0].currentMove; index += 1) step(game, { hp: true });
-  const release = game.combatEvents.filter((event) => event.type === "chargeRelease").at(-1);
-  assert(release, "held Orochinagi must emit a charge release");
-  assert.equal(release.level, 4);
-  assert.equal(release.damage, 270);
-  assert.equal(game.fighters[0].superMeter, 400, "held super must spend one stock exactly once");
-  assert.equal(moveStarts(game, "orochinagiHeavy").length, 1);
-}
-
 // Holding MP+MK and completing 66 cancels Parry into Drive Rush even though
 // the chord has no second button edge.
 {
@@ -178,4 +137,4 @@ function moveStarts(game, moveId) {
   assert.equal(game.fighters[1].drive, 382, "block Drive damage (18) plus one 200 Drive reversal cost must apply once");
 }
 
-process.stdout.write("v0.7 advanced runtime ok · charged supers + held-chord Drive Rush + contextual reversal\n");
+process.stdout.write("v0.7 advanced runtime ok · charged SA2 + held-chord Drive Rush + contextual reversal\n");

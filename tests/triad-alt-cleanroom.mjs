@@ -10,12 +10,11 @@ import { runHeadlessTournament } from "../src/headless.js";
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const SOURCE_ROOT = path.join(ROOT, "src");
 const ENTRY = path.join(SOURCE_ROOT, "triad-champion-agent-alt.js");
-const EXPECTED_ENTRY_SHA256 = "798c3a17845a8123c0deac9df77aca5b81b0e8cbe4095b4264daa6ad46ec6bb1";
+const EXPECTED_ENTRY_SHA256 = "4ef71745242caa02d8ada982e1456a179282604b413a418e39dc1dfb0edc9f46";
 const FORBIDDEN_BASENAMES = new Set(["ai.js", "ai-planner.js", "ai-executor.js"]);
 const ALLOWED_EDGES = new Map([
-  ["src/triad-champion-agent-alt.js", new Set(["./movesets/vanguard.js", "./movesets/ember.js"])],
+  ["src/triad-champion-agent-alt.js", new Set(["./movesets/vanguard.js"])],
   ["src/movesets/vanguard.js", new Set(["../move-data.js"])],
-  ["src/movesets/ember.js", new Set(["../move-data.js"])],
   ["src/move-data.js", new Set()],
 ]);
 const STATIC_IMPORT_RE = /(?:^|[;\n])\s*(?:import|export)\s+(?:[^"'`;]*?\s+from\s*)?["']([^"']+)["']/gm;
@@ -245,7 +244,7 @@ function fighter({ relation, name, templateId, x, facing, frame, role }) {
   };
 }
 
-function observation(frame, identity, ownTemplate) {
+function observation(frame, identity) {
   const facing = frame % 2 === 0 ? 1 : -1;
   const gaps = [42, 57, 72, 118, 148, 224, 260];
   const gap = gaps[frame % gaps.length];
@@ -262,13 +261,13 @@ function observation(frame, identity, ownTemplate) {
     timerFrames: Math.max(0, 3_600 - frame),
     side: facing > 0 ? "left" : "right",
     selfIndex: facing > 0 ? 0 : 1,
-    perception: { delayFrames: 12, opponentFrame: Math.max(0, frame - 12) },
+    perception: { delayFrames: 0, opponentFrame: frame },
     round: { number: Math.floor(frame / 90) + 1, score: { self: 0, opponent: 0 } },
     arena: { width: 960, height: 540, floorY: 460, left: 48, right: 912 },
     self: fighter({
       relation: "self",
       name: identity.selfName,
-      templateId: ownTemplate,
+      templateId: "vanguard",
       x: selfX,
       facing,
       frame,
@@ -277,7 +276,7 @@ function observation(frame, identity, ownTemplate) {
     opponent: fighter({
       relation: "opponent",
       name: identity.opponentName,
-      templateId: identity.opponentTemplate,
+      templateId: "vanguard",
       x: opponentX,
       facing: -facing,
       frame,
@@ -298,7 +297,7 @@ function observation(frame, identity, ownTemplate) {
   });
 }
 
-function matchInfo(identity, ownTemplate, index) {
+function matchInfo(identity, index) {
   return deepFreeze({
     schema: "agentfighter.match-info",
     version: 1,
@@ -309,8 +308,8 @@ function matchInfo(identity, ownTemplate, index) {
     roundSeconds: 60,
     side: index % 2 === 0 ? "left" : "right",
     selfIndex: index % 2,
-    self: { name: identity.selfName, templateId: ownTemplate, maxHealth: 10_000 },
-    opponent: { name: identity.opponentName, templateId: identity.opponentTemplate, maxHealth: 10_000 },
+    self: { name: identity.selfName, templateId: "vanguard", maxHealth: 10_000 },
+    opponent: { name: identity.opponentName, templateId: "vanguard", maxHealth: 10_000 },
     arena: { width: 960, height: 540, floorY: 460, left: 48, right: 912 },
   });
 }
@@ -335,8 +334,8 @@ function validateAction(action, label) {
   return clone(action);
 }
 
-function instantiate(templateHint) {
-  const agent = templateHint === undefined ? createCandidate() : createCandidate(templateHint);
+function instantiate() {
+  const agent = createCandidate();
   assert(agent && typeof agent === "object" && !Array.isArray(agent));
   assert.equal(typeof agent.reset, "function");
   assert.equal(typeof agent.act, "function");
@@ -351,17 +350,16 @@ const identities = Array.from({ length: 3 }, (_, index) => ({
   seed: randomUint32(),
   selfName: `self-${index}-${randomToken()}`,
   opponentName: `opponent-${index}-${randomToken()}`,
-  opponentTemplate: index % 2 === 0 ? "ember" : "vanguard",
 }));
 assert.equal(new Set(identities.map(({ matchId }) => matchId)).size, identities.length);
 
-for (const ownTemplate of ["vanguard", "ember"]) {
+{
   const agents = identities.map(() => instantiate());
   const traces = agents.map(() => []);
   agents.forEach((agent, index) => {
     const reads = new Set();
-    const guardedInfo = publicGuard(clone(matchInfo(identities[index], ownTemplate, index)), reads, "matchInfo");
-    callSync(() => agent.reset(guardedInfo), `${ownTemplate}-${index}.reset`);
+    const guardedInfo = publicGuard(clone(matchInfo(identities[index], index)), reads, "matchInfo");
+    callSync(() => agent.reset(guardedInfo), `vanguard-${index}.reset`);
     assert(![...reads].some((read) => /^matchInfo\.(?:seed|matchId|opponent)(?:\.|$)/.test(read)));
     assert(![...reads].some((read) => /\.name$/.test(read)));
   });
@@ -369,10 +367,10 @@ for (const ownTemplate of ["vanguard", "ember"]) {
   for (let frame = 0; frame < 180; frame += 1) {
     agents.forEach((agent, index) => {
       const reads = new Set();
-      const guarded = publicGuard(clone(observation(frame, identities[index], ownTemplate)), reads, "observation");
+      const guarded = publicGuard(clone(observation(frame, identities[index])), reads, "observation");
       traces[index].push(validateAction(
-        callSync(() => agent.act(guarded), `${ownTemplate}-${index}.act(${frame})`),
-        `${ownTemplate}-${index}.act(${frame})`,
+        callSync(() => agent.act(guarded), `vanguard-${index}.act(${frame})`),
+        `vanguard-${index}.act(${frame})`,
       ));
       assert(![...reads].some((read) => /^observation\.opponent\.(?:name|templateId)(?:\.|$)/.test(read)));
     });
@@ -381,21 +379,21 @@ for (const ownTemplate of ["vanguard", "ember"]) {
     assert.deepEqual(
       traces[index],
       traces[0],
-      `${ownTemplate}: randomized reset seed/names/opponent template must not change actions`,
+      "randomized reset seed/names must not change actions",
     );
   }
 
-  // A same-template public reset/observation overrides any factory hint; no
-  // opponent or tournament metadata can be smuggled through construction.
-  const hinted = instantiate(ownTemplate === "vanguard" ? "ember" : "vanguard");
+  // Opponent or tournament identity metadata cannot be smuggled through
+  // construction or reset.
+  const replay = instantiate();
   const plain = instantiate();
-  hinted.reset(matchInfo(identities[0], ownTemplate, 0));
-  plain.reset(matchInfo(identities[0], ownTemplate, 0));
+  replay.reset(matchInfo(identities[0], 0));
+  plain.reset(matchInfo(identities[0], 0));
   for (let frame = 0; frame < 45; frame += 1) {
     assert.deepEqual(
-      validateAction(hinted.act(observation(frame, identities[0], ownTemplate)), `${ownTemplate}-hinted-${frame}`),
-      validateAction(plain.act(observation(frame, identities[0], ownTemplate)), `${ownTemplate}-plain-${frame}`),
-      "public self template must determine policy after reset, not a stale factory hint",
+      validateAction(replay.act(observation(frame, identities[0])), `vanguard-replay-${frame}`),
+      validateAction(plain.act(observation(frame, identities[0])), `vanguard-plain-${frame}`),
+      "same public observations must determine policy independently of agent identity",
     );
   }
 
@@ -422,10 +420,7 @@ const summary = runHeadlessTournament({
   matches: 2,
   agentA: "balanced",
   agentB: "zoner",
-  templateA: "vanguard",
-  templateB: "ember",
   difficulty: "normal",
-  delay: 12,
   seed: randomUint32(),
   roundSeconds: 10,
   bestOf: 1,
@@ -463,7 +458,7 @@ const summary = runHeadlessTournament({
   },
 });
 
-assert.equal(summary.settings.delay, 12);
+assert.equal(Object.hasOwn(summary.settings, "delay"), false);
 assert.equal(summary.matches, 2);
 assert.equal(summary.participants.A.source, "injected");
 assert.equal(summary.participants.B.source, "injected");
@@ -472,16 +467,16 @@ assert.equal(summary.diagnostics.B.total, 0);
 assert.equal(headlessDecisions.length, summary.totalFrames);
 for (const participant of ["A", "B"]) {
   assert.equal(headlessObservations[participant].length, summary.totalFrames);
-  assert.deepEqual(new Set(headlessObservations[participant].map(({ delayFrames }) => delayFrames)), new Set([12]));
+  assert.deepEqual(new Set(headlessObservations[participant].map(({ delayFrames }) => delayFrames)), new Set([0]));
   for (const observed of headlessObservations[participant]) {
-    assert.equal(observed.opponentFrame, Math.max(0, observed.frame - 12));
+    assert.equal(observed.opponentFrame, observed.frame);
   }
 }
 for (const record of headlessDecisions) {
   for (const participant of ["A", "B"]) {
     const decision = record.decisions[participant];
     assert.equal(decision.decisionFrame, record.frame);
-    assert.equal(decision.observedFrame, Math.max(0, record.frame - 12));
+    assert.equal(decision.observedFrame, record.frame);
     assert.equal(decision.opponentObservedFrame, decision.observedFrame);
     assert.equal(decision.observationFrame, decision.observedFrame);
     assert.equal(decision.source, "agent");
@@ -495,6 +490,6 @@ const finalSource = await readFile(graph.entry, "utf8");
 assert.equal(sha256(finalSource), EXPECTED_ENTRY_SHA256, "candidate changed during final clean-room audit");
 process.stdout.write(
   `triad-alt-cleanroom ok · sha256=${EXPECTED_ENTRY_SHA256}`
-  + ` · graph=${graph.files.length} · identityVariants=${identities.length} · traceFrames=180x2`
-  + ` · headlessMatches=${summary.matches} · headlessFrames=${summary.totalFrames} · bothSidesDelay=12F\n`,
+  + ` · graph=${graph.files.length} · identityVariants=${identities.length} · traceFrames=180`
+  + ` · headlessMatches=${summary.matches} · headlessFrames=${summary.totalFrames} · realtime=both-sides\n`,
 );

@@ -17,19 +17,13 @@ const ATTACK_ACTIONS = new Set([
   "airLight",
   "airHeavy",
   "airTatsu",
-  "airHammer",
-  "rekkaLight",
-  "rekkaHeavy",
 ]);
 
 const tournamentOptions = Object.freeze({
   matches: 8,
   agentA: "pressure",
   agentB: "zoner",
-  templateA: "vanguard",
-  templateB: "ember",
   difficulty: "normal",
-  delay: 8,
   seed: 20260720,
   roundSeconds: 10,
   bestOf: 3,
@@ -78,21 +72,15 @@ function assertActionStats(actions) {
   assert(realAttackCount > 0, "action statistics must include an authored attack action");
 }
 
-function assertTemplateExclusiveActions(summary) {
+function assertSingleCharacterActions(summary) {
+  assert(
+    summary.actions.A.airTatsu + summary.actions.B.airTatsu > 0,
+    "the 苍流 mirror batch must exercise its authored air special",
+  );
   for (const participant of ["A", "B"]) {
-    const template = summary.participants[participant].template;
-    const counts = summary.actions[participant];
-    if (template === "vanguard") {
-      assert(
-        counts.airTatsu > 0,
-        `${participant} vanguard batch must actually perform airTatsu`,
-      );
-    } else if (template === "ember") {
-      assert(
-        counts.airHammer + counts.rekkaLight + counts.rekkaHeavy > 0,
-        `${participant} ember batch must actually perform airHammer or a rekka`,
-      );
-    }
+    assert.equal(Object.hasOwn(summary.actions[participant], "airHammer"), false);
+    assert.equal(Object.hasOwn(summary.actions[participant], "rekkaLight"), false);
+    assert.equal(Object.hasOwn(summary.actions[participant], "rekkaHeavy"), false);
   }
 }
 
@@ -118,13 +106,14 @@ function assertSummary(summary, elapsedMs) {
   assert.equal(summary.results.length, summary.matches, "results must contain one entry per match");
   assert.deepEqual(
     summary.templates,
-    { A: tournamentOptions.templateA, B: tournamentOptions.templateB },
-    "top-level templates must stay attributed to participants",
+    { A: "vanguard", B: "vanguard" },
+    "top-level templates must report the fixed single character",
   );
-  assert.equal(summary.settings.templateA, tournamentOptions.templateA, "settings must include template A");
-  assert.equal(summary.settings.templateB, tournamentOptions.templateB, "settings must include template B");
-  assert.equal(summary.participants.A.template, tournamentOptions.templateA, "participant A must include its template");
-  assert.equal(summary.participants.B.template, tournamentOptions.templateB, "participant B must include its template");
+  assert.equal(Object.hasOwn(summary.settings, "templateA"), false, "template A is no longer configurable");
+  assert.equal(Object.hasOwn(summary.settings, "templateB"), false, "template B is no longer configurable");
+  assert.equal(Object.hasOwn(summary.settings, "delay"), false, "settings must not expose the removed delay rule");
+  assert.equal(summary.participants.A.template, "vanguard", "participant A must use 苍流");
+  assert.equal(summary.participants.B.template, "vanguard", "participant B must use 苍流");
 
   const resultWins = { A: 0, B: 0, draw: 0 };
   let resultFrames = 0;
@@ -134,18 +123,10 @@ function assertSummary(summary, elapsedMs) {
     const expectedRight = index % 2 === 0 ? "B" : "A";
     assert.equal(result.left, expectedLeft, "default tournament must alternate the left participant");
     assert.equal(result.right, expectedRight, "default tournament must alternate the right participant");
-    assert.equal(result.templates.A, tournamentOptions.templateA, "template A must follow participant A");
-    assert.equal(result.templates.B, tournamentOptions.templateB, "template B must follow participant B");
-    assert.equal(
-      result.templates.left,
-      expectedLeft === "A" ? tournamentOptions.templateA : tournamentOptions.templateB,
-      "left-side template must follow the participant occupying the left side",
-    );
-    assert.equal(
-      result.templates.right,
-      expectedRight === "A" ? tournamentOptions.templateA : tournamentOptions.templateB,
-      "right-side template must follow the participant occupying the right side",
-    );
+    assert.equal(result.templates.A, "vanguard", "participant A must use 苍流");
+    assert.equal(result.templates.B, "vanguard", "participant B must use 苍流");
+    assert.equal(result.templates.left, "vanguard", "the left side must use 苍流");
+    assert.equal(result.templates.right, "vanguard", "the right side must use 苍流");
     assert(["A", "B", "draw"].includes(result.winner), "winner must be attributed to A/B, not side index");
     assert(Number.isInteger(result.frames) && result.frames > 0, "each result must report positive frames");
     assert(
@@ -159,17 +140,18 @@ function assertSummary(summary, elapsedMs) {
   assert.deepEqual(summary.wins, resultWins, "summary wins must agree with participant-attributed results");
   assert.equal(summary.totalFrames, resultFrames, "summary.totalFrames must equal result frame totals");
   assertActionStats(summary.actions);
-  assertTemplateExclusiveActions(summary);
+  assertSingleCharacterActions(summary);
 
   const serialized = JSON.stringify(summary);
   assert(serialized.length > 2, "summary must serialize to non-empty JSON");
   assert.doesNotThrow(() => JSON.parse(serialized), "serialized summary must be valid JSON");
-  assert(serialized.includes('"templateA":"vanguard"'), "JSON summary must include template A");
-  assert(serialized.includes('"templateB":"ember"'), "JSON summary must include template B");
+  assert(serialized.includes('"templates":{"A":"vanguard","B":"vanguard"}'), "JSON summary must include the fixed character");
+  assert.equal(serialized.includes("ember"), false, "JSON summary must not expose the removed character");
 
   const text = formatHeadlessText(summary);
-  assert(text.includes("vanguard"), "text summary must include template A");
-  assert(text.includes("ember"), "text summary must include template B");
+  assert(text.includes("vanguard"), "text summary must include the fixed character id");
+  assert.equal(text.includes("ember"), false, "text summary must not expose the removed character");
+  assert(text.includes("实时观测"), "text summary must state that observations are realtime");
 }
 
 function assertArgumentParsing() {
@@ -177,9 +159,6 @@ function assertArgumentParsing() {
     "--matches", "7",
     "--agent-a", "pressure",
     "--agent-b", "zoner",
-    "--template-a=ember",
-    "--template-b", "vanguard",
-    "--delay", "6",
     "--no-swap",
     "--format", "json",
   ]);
@@ -187,25 +166,25 @@ function assertArgumentParsing() {
   assert.equal(parsed.matches, 7, "--matches must parse as a number");
   assert.equal(parsed.agentA, "pressure", "--agent-a must select participant A");
   assert.equal(parsed.agentB, "zoner", "--agent-b must select participant B");
-  assert.equal(parsed.templateA, "ember", "--template-a must select participant A's template");
-  assert.equal(parsed.templateB, "vanguard", "--template-b must select participant B's template");
-  assert.equal(parsed.delay, 6, "--delay must parse as a frame count");
+  assert.equal(Object.hasOwn(parsed, "templateA"), false, "template A must no longer be configurable");
+  assert.equal(Object.hasOwn(parsed, "templateB"), false, "template B must no longer be configurable");
+  assert.equal(Object.hasOwn(parsed, "delay"), false, "parsed options must not expose a removed delay setting");
   assert.equal(parsed.swapSides, false, "--no-swap must disable side alternation");
   assert.equal(parsed.format, "json", "--format json must be retained");
 
   const defaults = parseHeadlessArgs([]);
-  assert.equal(defaults.templateA, "vanguard", "template A must default to vanguard");
-  assert.equal(defaults.templateB, "ember", "template B must default to ember");
+  assert.equal(Object.hasOwn(defaults, "templateA"), false);
+  assert.equal(Object.hasOwn(defaults, "templateB"), false);
 
   const invalidCases = [
     ["--matches", "0"],
     ["--matches", "many"],
     ["--agent-a", "unknown-agent"],
     ["--agent-b", "unknown-agent"],
-    ["--template-a", "unknown-template"],
-    ["--template-b", "unknown-template"],
-    ["--delay", "-1"],
-    ["--delay", "fast"],
+    ["--template-a", "vanguard"],
+    ["--template-b", "vanguard"],
+    ["--delay", "0"],
+    ["--delay", "6"],
     ["--format", "xml"],
   ];
   for (const args of invalidCases) {
@@ -218,6 +197,13 @@ function assertArgumentParsing() {
 }
 
 assertArgumentParsing();
+for (const delay of [0, 1]) {
+  assert.throws(
+    () => runHeadlessTournament({ ...tournamentOptions, matches: 1, delay }),
+    /取消|removed/i,
+    "programmatic delay must fail with an explicit migration error",
+  );
+}
 
 const firstStart = performance.now();
 const first = await runHeadlessTournament(tournamentOptions);
@@ -239,8 +225,8 @@ const fixedSides = await runHeadlessTournament({
 for (const result of fixedSides.results) {
   assert.equal(result.left, "A", "swapSides=false must keep A on the left");
   assert.equal(result.right, "B", "swapSides=false must keep B on the right");
-  assert.equal(result.templates.left, tournamentOptions.templateA, "A's template must remain on A");
-  assert.equal(result.templates.right, tournamentOptions.templateB, "B's template must remain on B");
+  assert.equal(result.templates.left, "vanguard", "A must use 苍流");
+  assert.equal(result.templates.right, "vanguard", "B must use 苍流");
 }
 
 process.stdout.write(

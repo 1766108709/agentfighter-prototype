@@ -18,18 +18,18 @@ function validateAction(action) {
   return INPUT_KEYS.every((key) => typeof action.input[key] === "boolean");
 }
 
-function fighter(templateId, x, facing) {
+function fighter(x, facing) {
   return {
     relation: "self",
-    name: templateId,
-    templateId,
+    name: "苍流",
+    templateId: "vanguard",
     position: { x, y: 388 },
     velocity: { x: 0, y: 0 },
     size: { width: 46, height: 112 },
     facing,
     onGround: true,
-    health: templateId === "vanguard" ? 10_000 : 1_000,
-    maxHealth: templateId === "vanguard" ? 10_000 : 1_000,
+    health: 10_000,
+    maxHealth: 10_000,
     recoverableHealth: 0,
     roundsWon: 0,
     resources: {
@@ -59,9 +59,9 @@ function fighter(templateId, x, facing) {
   };
 }
 
-function observation(templateId, opponentTemplateId, frame = 1) {
-  const self = fighter(templateId, 220, 1);
-  const opponent = fighter(opponentTemplateId, 570, -1);
+function observation(frame = 1) {
+  const self = fighter(220, 1);
+  const opponent = fighter(570, -1);
   opponent.relation = "opponent";
   return {
     schema: "agentfighter.observation",
@@ -73,7 +73,7 @@ function observation(templateId, opponentTemplateId, frame = 1) {
     timerFrames: 3_600 - frame,
     side: "left",
     selfIndex: 0,
-    perception: { delayFrames: 8, opponentFrame: Math.max(0, frame - 8) },
+    perception: { delayFrames: 0, opponentFrame: frame },
     round: { number: 1, score: { self: 0, opponent: 0 } },
     arena: { width: 960, height: 540, floorY: 444, left: 60, right: 900 },
     self,
@@ -91,23 +91,20 @@ for (const factory of [createTriadChampionAgent, namedFactory, createCandidate, 
   assert.equal(typeof agent[DEBUG_METHOD], "function");
 }
 
-for (const templateId of ["vanguard", "ember"]) {
-  const opponentTemplateId = templateId === "vanguard" ? "ember" : "vanguard";
-  const agent = createTriadChampionAgent();
-  agent.reset();
-  for (let frame = 1; frame <= 90; frame += 1) {
-    const action = agent.act(observation(templateId, opponentTemplateId, frame));
-    assert.equal(validateAction(action), true);
-    assert.equal(action.input.left && action.input.right, false);
-    assert.equal(action.input.up && action.input.down, false);
-  }
-  agent.end({ outcome: "draw" });
-  const debug = agent[DEBUG_METHOD]();
-  assert.equal(debug.selfTemplate, templateId);
-  assert.equal(debug.lastResult, "draw");
-  assert.equal(Object.hasOwn(debug, "intent"), false);
-  assert.equal(Object.hasOwn(debug, "reason"), false);
-  assert.doesNotThrow(() => JSON.stringify(debug));
+const agent = createTriadChampionAgent();
+agent.reset();
+for (let frame = 1; frame <= 90; frame += 1) {
+  const action = agent.act(observation(frame));
+  assert.equal(validateAction(action), true);
+  assert.equal(action.input.left && action.input.right, false);
+  assert.equal(action.input.up && action.input.down, false);
 }
+agent.end({ outcome: "draw" });
+const debug = agent[DEBUG_METHOD]();
+assert.equal(Object.hasOwn(debug, "selfTemplate"), false);
+assert.equal(debug.lastResult, "draw");
+assert.equal(Object.hasOwn(debug, "intent"), false);
+assert.equal(Object.hasOwn(debug, "reason"), false);
+assert.doesNotThrow(() => JSON.stringify(debug));
 
 console.log("Triad champion agent tests passed.");

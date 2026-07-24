@@ -5,7 +5,6 @@ import { EMPTY_COMBAT_INPUT, normalizeCombatInput } from "./input-schema.js";
 import { canAffordMove } from "./resources.js";
 import { recordCombatEvent } from "./telemetry.js";
 
-const DEFAULT_OBSERVATION_DELAY = 12;
 const CANONICAL_KEYS = Object.freeze(Object.keys(EMPTY_COMBAT_INPUT));
 
 const CANONICAL_PRESETS = {
@@ -108,18 +107,20 @@ const PRESET_ALIASES = Object.freeze({
  * `movesets` is injectable for simulations/tests, while the live game uses the
  * engine's exported MOVESETS catalogue.
  */
-export function createScriptAI({
-  preset = "balanced",
-  difficulty = "normal",
-  observationDelayFrames = DEFAULT_OBSERVATION_DELAY,
-  seed = 1,
-  movesets = ENGINE_MOVESETS,
-} = {}) {
+export function createScriptAI(options = {}) {
+  if (Object.hasOwn(options, "observationDelayFrames")) {
+    throw new RangeError("observationDelayFrames has been removed; observations are always real-time");
+  }
+  const {
+    preset = "balanced",
+    difficulty = "normal",
+    seed = 1,
+    movesets = ENGINE_MOVESETS,
+  } = options;
   const presetValue = typeof preset === "object" && preset ? preset.id : preset;
   const presetKey = PRESET_ALIASES[String(presetValue ?? "balanced").toLowerCase()] ?? "balanced";
   const profile = AI_PRESETS[presetKey];
   const difficultyName = normalizeDifficultyName(difficulty);
-  const delayFrames = clampInteger(observationDelayFrames, 0, 120, DEFAULT_OBSERVATION_DELAY);
   let planner = createTacticalPlanner({ preset: presetKey, difficulty: difficultyName, seed });
   // Motions stay tournament-legal but compact enough to fit real cancel
   // windows. Difficulty changes planning/observation, not whether the agent is
@@ -128,7 +129,6 @@ export function createScriptAI({
   let executor = createCommandExecutor({ difficulty: executorDifficulty });
   const adaptedMovesets = new Map();
 
-  let observationHistory;
   let syntheticFrame;
   let lastGameFrame;
   let lastDecisionKey;
@@ -150,7 +150,6 @@ export function createScriptAI({
   let wakeupMixups;
 
   function resetTemporal() {
-    observationHistory = [];
     syntheticFrame = 0;
     lastGameFrame = -1;
     lastDecisionKey = "";
@@ -198,7 +197,7 @@ export function createScriptAI({
 
     updateAirState(self);
     inferLegacyContact(self, liveOpponent, frame);
-    const observation = delayedObservation(game, liveOpponent, frame);
+    const observation = currentObservation(game, liveOpponent, frame);
     const opponent = observation.fighter;
     resolvePendingBait(game, selfIndex, opponent, frame);
     const contact = normalizedContact(self.lastContact ?? inferredContact, frame);
@@ -536,36 +535,20 @@ export function createScriptAI({
     lastOpponentBlockstun = blockstun;
   }
 
-  function delayedObservation(game, opponent, frame) {
+  function currentObservation(game, opponent, frame) {
     const snapshot = {
       frame,
       fighter: snapshotFighter(opponent),
       projectiles: (game?.projectiles ?? []).map(snapshotProjectile),
     };
-    const previous = observationHistory[observationHistory.length - 1];
-    if (!previous || previous.frame !== frame) observationHistory.push(snapshot);
-    else observationHistory[observationHistory.length - 1] = snapshot;
-
-    const targetFrame = frame - delayFrames;
-    while (observationHistory.length > 2 && observationHistory[1].frame < targetFrame - 120) {
-      observationHistory.shift();
-    }
-    let selected = observationHistory[0] ?? snapshot;
-    for (let index = observationHistory.length - 1; index >= 0; index -= 1) {
-      if (observationHistory[index].frame <= targetFrame) {
-        selected = observationHistory[index];
-        break;
-      }
-    }
-    lastObservedFrame = selected.frame;
-    return selected;
+    lastObservedFrame = snapshot.frame;
+    return snapshot;
   }
 
   function getDebugState() {
     return {
       preset: presetKey,
       difficulty: difficultyName,
-      observationDelayFrames: delayFrames,
       observedFrame: lastObservedFrame,
       lastPlan,
       planner: planner.getDebugState(),
@@ -1007,9 +990,8 @@ function cancelAllowsMove(cancel, moveId, move) {
 
 function chooseAirMove(moveset, templateId) {
   const moves = Object.values(moveset?.moves ?? {});
-  const preferred = String(templateId).toLowerCase().includes("ember")
-    ? ["airhammer", "naraku"]
-    : ["airtatsu", "air_tatsu", "tatsumaki"];
+  void templateId;
+  const preferred = ["airtatsu", "air_tatsu", "tatsumaki"];
   return moves.find((move) => preferred.some((term) => move.id.toLowerCase().includes(term)))
     ?? moves.find((move) => move.category === "special")
     ?? moves.find((move) => move.strength === "heavy")

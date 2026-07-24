@@ -28,8 +28,8 @@ assert(projectileGame.projectiles.length > 0, "motion command should create a pr
 assert.equal(projectileGame.fighters[0].energy, startingEnergy, "fireballs should not consume a finite resource");
 
 const match = createGame({ roundTimeSeconds: 10, bestOf: 3 });
-const p1 = createScriptAI({ preset: "pressure", difficulty: "hard", observationDelayFrames: 6, seed: 11 });
-const p2 = createScriptAI({ preset: "zoner", difficulty: "normal", observationDelayFrames: 12, seed: 22 });
+const p1 = createScriptAI({ preset: "pressure", difficulty: "hard", seed: 11 });
+const p2 = createScriptAI({ preset: "zoner", difficulty: "normal", seed: 22 });
 
 for (let frame = 0; frame < 30000 && match.phase !== "matchOver"; frame += 1) {
   if (match.phase === "roundOver") {

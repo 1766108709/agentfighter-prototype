@@ -7,13 +7,10 @@ import { createActionV1 } from "../src/agent-sdk.js";
 import { runHeadlessTournament } from "../src/headless.js";
 
 export const OPPONENT_IDS = Object.freeze(["balanced", "pressure", "zoner"]);
-export const TEMPLATE_LEGS = Object.freeze([
-  Object.freeze({ candidateTemplate: "vanguard", opponentTemplate: "ember" }),
-  Object.freeze({ candidateTemplate: "ember", opponentTemplate: "vanguard" }),
-]);
+export const FIGHTER_ID = "vanguard";
 export const GAUNTLET_RULES = Object.freeze({
   difficulty: "hard",
-  delay: 12,
+  observation: "realtime",
   bestOf: 3,
   roundSeconds: 60,
   swapSides: true,
@@ -41,14 +38,14 @@ Usage:
 
 Options:
   --candidate <path>       Local ESM module exporting default/createAgent/candidateFactory/makeAgent
-  --samples <even n>       Total matches per opponent; half use each template leg (default: ${DEFAULT_SAMPLES})
+  --samples <n>            Matches per opponent with both sides using 苍流 (default: ${DEFAULT_SAMPLES})
   --split <name>           training (seed 10000-29999) or holdout (seed 70000+)
   --seed <uint32>          Tournament seed inside the selected split (split default if omitted)
   --format <text|json>     Output format (default: text)
   --help, -h               Show this help
 
 The candidate factory is called with no arguments when its declared arity is 0,
-or with only the public candidate template string when its declared arity is 1.
+or with the single public fighter id "${FIGHTER_ID}" when its declared arity is 1.
 Factories declaring two or more parameters are rejected.
 `;
 
@@ -114,11 +111,8 @@ export function validateGauntletOptions(options = {}) {
   }
 
   const samples = Number(options.samples ?? DEFAULT_SAMPLES);
-  if (!Number.isInteger(samples) || samples < 2 || samples > 100_000) {
-    throw new GauntletArgumentError("samples must be an integer from 2 to 100000");
-  }
-  if (samples % 2 !== 0) {
-    throw new GauntletArgumentError("samples must be even so both template legs receive exactly half");
+  if (!Number.isInteger(samples) || samples < 1 || samples > 100_000) {
+    throw new GauntletArgumentError("samples must be an integer from 1 to 100000");
   }
 
   const seed = options.seed === undefined ? seedRange.defaultSeed : Number(options.seed);
@@ -137,15 +131,16 @@ export function validateGauntletOptions(options = {}) {
 }
 
 /**
- * Run all six black-box legs. Participant A is always the candidate; physical
- * left/right placement is alternated by the public tournament runner.
+ * Run one single-fighter sample against each opponent. Participant A is always
+ * the candidate; physical left/right placement is alternated by the public
+ * tournament runner.
  */
 export function evaluateGauntlet(candidateFactory, options = {}, dependencies = {}) {
   if (typeof candidateFactory !== "function") {
     throw new GauntletArgumentError("candidateFactory must be a function");
   }
   if (candidateFactory.length > 1) {
-    throw new GauntletArgumentError("candidateFactory may declare zero parameters or one template parameter");
+    throw new GauntletArgumentError("candidateFactory may declare zero parameters or one fighter-id parameter");
   }
 
   const settings = validateGauntletOptions(options);
@@ -154,54 +149,38 @@ export function evaluateGauntlet(candidateFactory, options = {}, dependencies = 
     throw new GauntletArgumentError("tournamentRunner must be a function");
   }
 
-  const perLegSamples = settings.samples / TEMPLATE_LEGS.length;
   const opponents = {};
   const overall = emptyStats();
 
   for (const opponent of OPPONENT_IDS) {
-    const templates = {};
-    const opponentTotals = emptyStats();
-
-    for (const leg of TEMPLATE_LEGS) {
-      const candidate = instantiateCandidate(candidateFactory, leg.candidateTemplate);
-      const summary = tournamentRunner(
-        {
-          matches: perLegSamples,
-          agentA: "balanced",
-          agentB: opponent,
-          templateA: leg.candidateTemplate,
-          templateB: leg.opponentTemplate,
-          difficulty: GAUNTLET_RULES.difficulty,
-          delay: GAUNTLET_RULES.delay,
-          bestOf: GAUNTLET_RULES.bestOf,
-          roundSeconds: GAUNTLET_RULES.roundSeconds,
-          swapSides: GAUNTLET_RULES.swapSides,
-          seed: settings.seed,
-        },
-        { agents: { A: candidate } },
-      );
-      const stats = candidateStats(summary, perLegSamples);
-      templates[leg.candidateTemplate] = {
-        candidateTemplate: leg.candidateTemplate,
-        opponentTemplate: leg.opponentTemplate,
-        ...stats,
-      };
-      addStats(opponentTotals, stats);
-      addStats(overall, stats);
-    }
-
+    const candidate = instantiateCandidate(candidateFactory, FIGHTER_ID);
+    const summary = tournamentRunner(
+      {
+        matches: settings.samples,
+        agentA: "balanced",
+        agentB: opponent,
+        difficulty: GAUNTLET_RULES.difficulty,
+        bestOf: GAUNTLET_RULES.bestOf,
+        roundSeconds: GAUNTLET_RULES.roundSeconds,
+        swapSides: GAUNTLET_RULES.swapSides,
+        seed: settings.seed,
+      },
+      { agents: { A: candidate } },
+    );
+    const stats = candidateStats(summary, settings.samples);
     opponents[opponent] = {
-      ...finishStats(opponentTotals),
-      templates,
+      fighterId: FIGHTER_ID,
+      ...stats,
     };
+    addStats(overall, stats);
   }
 
   return {
     schema: "agentfighter-gauntlet-eval-v1",
     split: settings.split,
     seed: settings.seed,
+    fighterId: FIGHTER_ID,
     samplesPerOpponent: settings.samples,
-    samplesPerTemplateLeg: perLegSamples,
     rules: { ...GAUNTLET_RULES },
     opponents,
     overall: finishStats(overall),
@@ -212,19 +191,14 @@ export function formatGauntletText(report) {
   const lines = [
     "AgentFighter black-box gauntlet",
     `split=${report.split} seed=${report.seed} samples/opponent=${report.samplesPerOpponent}`,
-    `rules=${report.rules.difficulty} ${report.rules.delay}F BO${report.rules.bestOf} ${report.rules.roundSeconds}s swapSides=${report.rules.swapSides}`,
+    `fighter=${report.fighterId} (苍流)`,
+    `rules=${report.rules.difficulty} realtime BO${report.rules.bestOf} ${report.rules.roundSeconds}s swapSides=${report.rules.swapSides}`,
     `overall ${formatStats(report.overall)}`,
   ];
 
   for (const opponent of OPPONENT_IDS) {
     const entry = report.opponents[opponent];
     lines.push(`${opponent} ${formatStats(entry)}`);
-    for (const leg of TEMPLATE_LEGS) {
-      const stats = entry.templates[leg.candidateTemplate];
-      lines.push(
-        `  candidate ${stats.candidateTemplate} vs ${stats.opponentTemplate}: ${formatStats(stats)}`,
-      );
-    }
   }
   return `${lines.join("\n")}\n`;
 }
@@ -256,10 +230,10 @@ export async function loadCandidateFactory(specifier, cwd = process.cwd()) {
   );
 }
 
-function instantiateCandidate(candidateFactory, template) {
+function instantiateCandidate(candidateFactory, fighterId) {
   const candidate = candidateFactory.length === 0
     ? candidateFactory()
-    : candidateFactory(template);
+    : candidateFactory(fighterId);
   if (candidate && typeof candidate.then === "function") {
     throw new GauntletArgumentError("candidateFactory must return synchronously");
   }
