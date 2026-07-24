@@ -243,8 +243,6 @@ function assertDualController(input) {
     matches: 1,
     agentA: "pressure",
     agentB: "zoner",
-    templateA: "vanguard",
-    templateB: "ember",
     difficulty: "hard",
     seed: 71,
     roundSeconds: 10,

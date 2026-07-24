@@ -3,7 +3,6 @@ const dialog = document.querySelector("#agent-access-dialog");
 const apiBaseInput = document.querySelector("#agent-api-base");
 const apiStatus = document.querySelector("#agent-api-status");
 const nameInput = document.querySelector("#agent-fighter-name");
-const templateSelect = document.querySelector("#agent-fighter-template");
 const createButton = document.querySelector("#agent-create-button");
 const result = document.querySelector("#agent-onboarding-result");
 const promptOutput = document.querySelector("#agent-onboarding-prompt");
@@ -33,7 +32,6 @@ createButton?.addEventListener("click", async () => {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         name: nameInput.value.trim(),
-        templateId: templateSelect?.value || "vanguard",
       }),
     });
     const body = await readJson(response);

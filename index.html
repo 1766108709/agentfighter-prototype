@@ -41,7 +41,7 @@
             <div class="overlay-card hero-card">
               <p class="eyebrow">PLAYABLE PROTOTYPE v0.9</p>
               <h1>玩家亲自上场，或观看<br /><span>两个脚本 Agent 对决</span></h1>
-              <p class="hero-copy">苍流与赤锋双角色模板，加入空战、地面攻防与专属连段。AI 和人类严格使用同一套输入规则。</p>
+              <p class="hero-copy">所有对局双方固定使用苍流，以同一套招式与资源规则比拼立回、连段和临场决策。AI 和人类严格使用同一套输入规则。</p>
               <div class="hero-actions">
                 <button id="start-button" class="primary-button" type="button">开始对战</button>
                 <button id="random-button" class="secondary-button" type="button">随机 Agent</button>
@@ -162,22 +162,6 @@
                 <option value="ai-vs-ai">Agent VS Agent</option>
               </select>
             </label>
-            <div class="template-grid" aria-label="角色模板">
-              <label id="left-template-row" class="template-row">
-                <span id="left-template-label">玩家模板</span>
-                <select id="left-template-select">
-                  <option value="vanguard" selected>苍流 · 全能型</option>
-                  <option value="ember">赤锋 · 连击型</option>
-                </select>
-              </label>
-              <label id="right-template-row" class="template-row">
-                <span id="right-template-label">对手模板</span>
-                <select id="right-template-select">
-                  <option value="vanguard">苍流 · 全能型</option>
-                  <option value="ember" selected>赤锋 · 连击型</option>
-                </select>
-              </label>
-            </div>
             <label id="left-agent-row" class="agent-side-row is-hidden">
               <span id="left-agent-label">左侧 Agent</span>
               <select id="left-agent-select">
@@ -216,20 +200,15 @@
             </div>
             <div class="button-layouts">
               <div class="button-layout">
-                <strong>6键 · SF</strong>
+                <strong>苍流 · 6键</strong>
                 <p><kbd>U</kbd><kbd>I</kbd><kbd>O</kbd><span>LP · MP · HP</span></p>
                 <p><kbd>J</kbd><kbd>K</kbd><kbd>L</kbd><span>LK · MK · HK</span></p>
-              </div>
-              <div class="button-layout kof-layout">
-                <strong>4键 · KOF</strong>
-                <p><kbd>U</kbd><kbd>J</kbd><span>A · LP / B · LK</span></p>
-                <p><kbd>O</kbd><kbd>L</kbd><span>C · HP / D · HK</span></p>
               </div>
             </div>
             <div class="move-list system-key-grid">
               <div><kbd>H</kbd><span>投技</span></div>
-              <div><kbd>Shift</kbd><span>Parry / Roll</span></div>
-              <div><kbd>;</kbd><span>Impact / Blowback</span></div>
+              <div><kbd>Shift</kbd><span>Parry</span></div>
+              <div><kbd>;</kbd><span>Drive Impact</span></div>
               <div><kbd>Space</kbd><span>防御快捷键</span></div>
             </div>
             <p class="relative-hint">方向会按当前朝向自动镜像</p>
@@ -256,7 +235,7 @@
 
       <footer class="footer-note">
         <span>Prototype v0.9 · Canvas 2D · 60Hz</span>
-        <span>6键 SF / 4键 KOF · 角色专属帧数据</span>
+        <span>苍流 · 6键输入 · 完整帧数据</span>
       </footer>
     </main>
 
@@ -278,19 +257,10 @@
         </label>
         <p id="agent-api-status" class="agent-api-status">正在检查 Agent API…</p>
 
-        <div class="agent-access-grid">
-          <label>
-            <span>角色名</span>
-            <input id="agent-fighter-name" type="text" maxlength="48" value="My Fighter" autocomplete="off" />
-          </label>
-          <label>
-            <span>角色模板</span>
-            <select id="agent-fighter-template">
-              <option value="vanguard" selected>苍流 · 全能型</option>
-              <option value="ember">赤锋 · 连击型</option>
-            </select>
-          </label>
-        </div>
+        <label>
+          <span>参赛名称</span>
+          <input id="agent-fighter-name" type="text" maxlength="48" value="My Fighter" autocomplete="off" />
+        </label>
 
         <button id="agent-create-button" class="primary-button agent-create-button" type="button" disabled>生成 Fighter Key</button>
 

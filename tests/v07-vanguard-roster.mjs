@@ -11,9 +11,11 @@ const EXPECTED_BY_CATEGORY = {
     "crouchLightKick", "crouchMediumKick", "crouchHeavyKick",
     "jumpLightPunch", "jumpMediumPunch", "jumpHeavyPunch",
     "jumpLightKick", "jumpMediumKick", "jumpHeavyKick",
+    "closeC",
   ],
   commandNormal: [
     "collarboneBreaker", "solarPlexusStrike", "shortUppercut", "axeKick", "whirlwindKick",
+    "shiki88Canceled",
   ],
   targetCombo: ["highDoubleStrike", "fuwaSecond", "fuwaFinisher"],
   throw: ["shoulderThrow", "somersaultThrow"],
@@ -34,20 +36,21 @@ const EXPECTED_BY_CATEGORY = {
     "superArt2Level2", "superArt2Level2Denjin",
     "superArt2Level3", "superArt2Level3Denjin", "superArt3",
   ],
-  climax: ["criticalArt"],
+  climax: ["criticalArt", "yakumo"],
   system: [
     "forwardDash", "backDash", "driveImpact", "driveReversalBlock", "driveReversalWakeup",
     "driveParry", "perfectParryStrike", "perfectParryProjectile", "parryDriveRush",
     "cancelDriveRush", "throwEscape", "neutralTaunt", "forwardTaunt", "backTaunt", "downTaunt",
+    "quickMax",
   ],
 };
 
 const expectedIds = Object.values(EXPECTED_BY_CATEGORY).flat();
 const moves = VANGUARD_MOVESET.moves;
 
-assert.equal(expectedIds.length, 82, "the authored roster expectation must remain explicit");
+assert.equal(expectedIds.length, 86, "the authored roster expectation must remain explicit");
 assert.equal(new Set(expectedIds).size, expectedIds.length, "expected move IDs must be unique");
-assert.equal(Object.keys(moves).length, 82, "Vanguard must expose the full 82-entry operable roster");
+assert.equal(Object.keys(moves).length, 86, "苍流 must expose the full 86-entry operable roster");
 assert.deepEqual(new Set(Object.keys(moves)), new Set(expectedIds), "no expected move may be missing or silently renamed");
 assert.deepEqual(validateMoveset(VANGUARD_MOVESET), []);
 assert(Object.isFrozen(VANGUARD_MOVESET));
@@ -131,6 +134,10 @@ assert.equal(moves.superArt2Level3.resourceCost.super, 200);
 assert.equal(moves.superArt3.resourceCost.super, 300);
 assert.equal(moves.driveImpact.resourceCost.drive, 100);
 assert.equal(moves.cancelDriveRush.resourceCost.drive, 300);
+assert.equal(moves.quickMax.resourceCost.drive, 600);
+assert.equal(moves.yakumo.resourceCost.super, 300);
+assert.equal(moves.yakumo.maxModeDamageMultiplier, 2.125);
+assert.equal(moves.yakumo.hits.length, 13);
 assert(moves.criticalArt.resource.conditions.includes("healthRatio<=0.25"));
 assert(moves.denjinCharge.resource.conditions.includes("denjinStock<1"));
 
@@ -150,5 +157,5 @@ assert.equal(EXPECTED_BY_CATEGORY.throw.length, 2);
 assert(!Object.values(moves).some((move) => move.tags.includes("airThrow")));
 
 process.stdout.write(
-  "v0.7 Vanguard roster ok · 82 moves · full strengths/OD/Denjin/supers/system + aliases\n",
+  "v0.7 苍流 roster ok · 86 moves · full strengths/OD/Denjin/supers/system + TOD route + aliases\n",
 );

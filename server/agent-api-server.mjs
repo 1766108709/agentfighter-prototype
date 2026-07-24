@@ -17,6 +17,7 @@ const DEFAULT_ROOT = fileURLToPath(new URL("../", import.meta.url));
 const DEFAULT_DATA_DIR = resolve(DEFAULT_ROOT, ".data", "agent-api");
 const MAX_BODY_BYTES = 128 * 1024;
 const DEFAULT_COOLDOWN_MS = 2_000;
+const SINGLE_FIGHTER_ID = "vanguard";
 const DEFAULT_OFFICIAL_RULESET = Object.freeze({
   id: "standard-v2",
   difficulty: "normal",
@@ -31,21 +32,21 @@ const BUILTIN_OPPONENTS = Object.freeze([
     id: "builtin:balanced",
     preset: "balanced",
     name: "Echo · 均衡型",
-    templateId: "vanguard",
+    templateId: SINGLE_FIGHTER_ID,
     description: "中距离控场，按局势切换攻防。",
   }),
   Object.freeze({
     id: "builtin:pressure",
     preset: "pressure",
     name: "Blitz · 压迫型",
-    templateId: "ember",
+    templateId: SINGLE_FIGHTER_ID,
     description: "持续贴身、抢回合并尝试高伤连段。",
   }),
   Object.freeze({
     id: "builtin:zoner",
     preset: "zoner",
     name: "Vela · 远程型",
-    templateId: "vanguard",
+    templateId: SINGLE_FIGHTER_ID,
     description: "用飞行物和对空控制屏幕空间。",
   }),
 ]);
@@ -245,7 +246,6 @@ export async function createAgentApiServer(options = {}) {
         const code = agentCode(body.code);
         const submittedBy = requiredText(body.submittedBy, "submittedBy", 80);
         await validatePublishedCode(code, {
-          templateA: fighter.templateId,
           timeoutMs: Math.min(matchTimeoutMs, 5_000),
         });
         const published = await store.publishVersion(authorization, {
@@ -298,8 +298,6 @@ export async function createAgentApiServer(options = {}) {
           codeA: code,
           codeB: opponent.code,
           opponentPreset: opponent.preset,
-          templateA: fighter.templateId,
-          templateB: opponent.templateId,
           ...settings,
           timeoutMs: matchTimeoutMs,
           recordReplay: true,
@@ -328,6 +326,7 @@ export async function createAgentApiServer(options = {}) {
           ...BUILTIN_OPPONENTS.map((builtin) => ({ ...builtin, kind: "builtin" })),
           ...published.map((candidate) => ({
             ...candidate,
+            templateId: SINGLE_FIGHTER_ID,
             kind: "fighter",
             activeVersion: candidate.versions.find((version) => version.id === candidate.activeVersionId) ?? null,
           })),
@@ -343,6 +342,7 @@ export async function createAgentApiServer(options = {}) {
           .filter((candidate) => !candidate.name.startsWith("[system]"))
           .map((candidate) => ({
             ...candidate,
+            templateId: SINGLE_FIGHTER_ID,
             winRate: candidate.stats.matches > 0
               ? candidate.stats.wins / candidate.stats.matches
               : 0,
@@ -375,8 +375,6 @@ export async function createAgentApiServer(options = {}) {
           codeA: active.code,
           codeB: opponent.code,
           opponentPreset: opponent.preset,
-          templateA: fighter.templateId,
-          templateB: opponent.templateId,
           ...settings,
           timeoutMs: matchTimeoutMs,
           recordReplay: true,
@@ -477,12 +475,10 @@ export async function createAgentApiServer(options = {}) {
   });
 }
 
-async function validatePublishedCode(code, { templateA, timeoutMs }) {
+async function validatePublishedCode(code, { timeoutMs }) {
   const completed = await runSandboxMatch({
     matchId: `validate_${randomIdentifier()}`,
     codeA: code,
-    templateA,
-    templateB: templateA === "vanguard" ? "ember" : "vanguard",
     bestOf: 1,
     roundSeconds: 10,
     maxFramesPerMatch: 60,
@@ -505,7 +501,7 @@ async function resolveOpponent(store, builtinStorage, fighterId, requestedId) {
     return {
       public: { ...builtin, kind: "builtin" },
       preset: builtin.preset,
-      templateId: builtin.templateId,
+      templateId: SINGLE_FIGHTER_ID,
       code: null,
       codeHash: `builtin:${builtin.preset}`,
       storageFighterId: storage.id,
@@ -522,9 +518,9 @@ async function resolveOpponent(store, builtinStorage, fighterId, requestedId) {
   }
   const publicFighter = await store.getFighterById(opponentId);
   return {
-    public: { ...publicFighter, kind: "fighter" },
+    public: { ...publicFighter, templateId: SINGLE_FIGHTER_ID, kind: "fighter" },
     preset: "balanced",
-    templateId: runtime.templateId,
+    templateId: SINGLE_FIGHTER_ID,
     code: runtime.activeVersion.code,
     codeHash: runtime.activeVersion.codeHash,
     storageFighterId: runtime.id,
@@ -541,7 +537,7 @@ async function ensureBuiltinStorageFighters(store) {
     if (!fighter) {
       const created = await store.createFighter({
         name: systemName,
-        templateId: builtin.templateId,
+        templateId: SINGLE_FIGHTER_ID,
       });
       fighter = created.fighter;
     }
@@ -578,7 +574,7 @@ function compactFighter(fighter) {
   return {
     id: fighter.id,
     name: fighter.name,
-    templateId: fighter.templateId,
+    templateId: SINGLE_FIGHTER_ID,
     activeVersionId: fighter.activeVersionId,
     stats: fighter.stats,
   };
@@ -588,7 +584,7 @@ function ownerApiFighter(fighter) {
   return {
     id: fighter.id,
     name: fighter.name,
-    templateId: fighter.templateId,
+    templateId: SINGLE_FIGHTER_ID,
     createdAt: fighter.createdAt,
     updatedAt: fighter.updatedAt,
     versions: fighter.versions.map(versionMetadata),
@@ -810,9 +806,9 @@ function agentCode(value) {
 }
 
 function templateIdentifier(value) {
-  const id = String(value ?? "vanguard").toLowerCase();
+  const id = String(value ?? SINGLE_FIGHTER_ID).toLowerCase();
   if (!publicTemplateManifest(id)) {
-    throw new ApiError(400, "INVALID_TEMPLATE", "templateId must be vanguard or ember.");
+    throw new ApiError(400, "INVALID_TEMPLATE", "templateId must be vanguard (苍流).");
   }
   return id;
 }

@@ -17,7 +17,9 @@ const matchesDir = join(dataDir, "matches");
 try {
   let store = await createAgentStore({ dataDir });
   const left = await store.createFighter({ name: "Store Left", templateId: "vanguard" });
-  const right = await store.createFighter({ name: "Store Right", templateId: "ember" });
+  const right = await store.createFighter({ name: "Store Right", templateId: "vanguard" });
+  assert.equal(left.fighter.templateId, "vanguard");
+  assert.equal(right.fighter.templateId, "vanguard");
 
   const rankedId = "mat_ranked_recovery";
   const beforeRanked = await readFile(stateFile, "utf8");

@@ -475,8 +475,6 @@ function testCustomHeadlessAgents() {
     matches: 1,
     agentA: "balanced",
     agentB: "zoner",
-    templateA: "vanguard",
-    templateB: "ember",
     roundSeconds: 10,
     bestOf: 1,
     seed: 73,
@@ -501,6 +499,11 @@ function testCustomHeadlessAgents() {
   assert.equal(summary.matches, 1);
   assert.equal(summary.participants.A.name, "custom-A");
   assert.equal(summary.participants.B.name, "custom-B");
+  assert.deepEqual(summary.templates, { A: "vanguard", B: "vanguard" });
+  assert.equal(summary.participants.A.template, "vanguard");
+  assert.equal(summary.participants.B.template, "vanguard");
+  assert.equal(Object.hasOwn(summary.settings, "templateA"), false);
+  assert.equal(Object.hasOwn(summary.settings, "templateB"), false);
   assert.equal(summary.participants.A.source, "injected");
   assert.equal(summary.determinism.agents, "unverified");
   assert(summary.totalFrames > 0);
@@ -549,6 +552,11 @@ function testCustomHeadlessAgents() {
   assert(
     Object.values(summary.actions.B).some((count) => count > 0),
     "custom B must produce a recognized combat action",
+  );
+  assert.throws(
+    () => runHeadlessTournament({ matches: 1, templateA: "ember" }),
+    /templateA\/templateB.*removed/i,
+    "legacy dual-template tournament options must fail with a migration error",
   );
 }
 

@@ -1,16 +1,16 @@
 import { neutralInput } from "./input.js";
 
-export const TOD_EXHIBITION_ROUTE_LABEL = "c.C → 3D → QUICK MAX → YAKUMO";
+export const TOD_EXHIBITION_ROUTE_LABEL = "近身重拳 → 双断踢 → 极限解放 → 天穹十三式";
 
 const ROUTE_STEPS = Object.freeze({
   intro: "满血 · 满资源 · 角落就位",
-  closeC: "STEP 1/4 · c.C 起手",
-  waitCloseC: "STEP 1/4 · c.C 命中确认",
-  shiki88: "STEP 2/4 · 3D 两段确认",
-  waitShiki88: "STEP 2/4 · 3D 两段确认",
-  quickMax: "STEP 3/4 · QUICK MAX",
-  waitYakumo: "STEP 4/4 · YAKUMO 启动",
-  yakumo: "STEP 4/4 · YAKUMO",
+  closeC: "STEP 1/4 · 苍流近身重拳",
+  waitCloseC: "STEP 1/4 · 近身重拳命中确认",
+  shiki88: "STEP 2/4 · 双断踢两段确认",
+  waitShiki88: "STEP 2/4 · 双断踢两段确认",
+  quickMax: "STEP 3/4 · 极限解放",
+  waitYakumo: "STEP 4/4 · 天穹十三式启动",
+  yakumo: "STEP 4/4 · 天穹十三式",
   verify: "逐击验真中",
   complete: "十割成立",
   failed: "路线失败",
@@ -173,6 +173,8 @@ export function evaluateTodExhibition(game) {
   const legalResourceRoute = Boolean(
     quickMaxStart && yakumoStart &&
     Number(quickMaxStart.frame) < Number(yakumoStart.frame) &&
+    Number(quickMaxStart.resourceCost?.drive) === 600 &&
+    Number(yakumoStart.resourceCost?.super) === 300 &&
     yakumoContacts.length === 13 &&
     yakumoContacts.every((event) => Math.abs(Number(event.damageModifier) - 2.125) < 1e-9)
   );
@@ -193,8 +195,8 @@ export function evaluateTodExhibition(game) {
   else if (comboEnd && !fullLife) reason = "不是满血起手的连续击杀";
   else if (!standardDamage) reason = "检测到非标准伤害";
   else if (comboEnd && !singleCombo) reason = "命中记录不属于同一连续连段";
-  else if (comboEnd && !authoredStarter) reason = "起手不是 c.C → 3D 两段";
-  else if (comboEnd && !legalResourceRoute) reason = "Quick MAX 或 Climax 资源路线不完整";
+  else if (comboEnd && !authoredStarter) reason = "起手不是近身重拳 → 双断踢两段";
+  else if (comboEnd && !legalResourceRoute) reason = "极限解放或奥义资源路线不完整";
   else if (defender?.health === 0 && !comboEnd?.tod) reason = "KO 未通过自然十割验真";
   else if (comboEnd && Number(comboEnd.appliedDamage) !== Number(comboEnd.maxHealth)) reason = "实际扣血未覆盖完整生命值";
   return {

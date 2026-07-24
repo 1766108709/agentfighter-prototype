@@ -19,7 +19,6 @@ function createAgent(api) {
     },
   };
 }`;
-
 const dataDir = await mkdtemp(join(tmpdir(), "agentfighter-api-test-"));
 let application = await createAgentApiServer({
   dataDir,
@@ -44,6 +43,8 @@ try {
   assert.equal(manifest.body.schema, "agentfighter.template-manifest");
   assert(manifest.body.moves.length > 50);
   assert(!JSON.stringify(manifest.body).includes('"hitboxes"'));
+  const removedTemplate = await jsonRequest("/api/templates/ember");
+  assert.equal(removedTemplate.response.status, 404);
 
   const contract = await jsonRequest("/api/schemas/agent-v1");
   assert.equal(contract.response.status, 200);
@@ -58,10 +59,20 @@ try {
     contract.body.schemas.observationV1.example.frame,
   );
 
-  const first = await createFighter("API Alpha", "vanguard");
-  const second = await createFighter("API Beta", "ember");
+  const removedTemplateCreate = await jsonRequest("/api/fighters", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ name: "Removed Ember", templateId: "ember" }),
+  });
+  assert.equal(removedTemplateCreate.response.status, 400);
+  assert.equal(removedTemplateCreate.body.error.code, "INVALID_TEMPLATE");
+
+  const first = await createFighter("API Alpha");
+  const second = await createFighter("API Beta");
   assert.match(first.key, /^afk_/);
   assert.notEqual(first.key, second.key);
+  assert.equal(first.templateId, "vanguard");
+  assert.equal(second.templateId, "vanguard");
   assert.equal(first.apiBaseUrl, base);
   assert.equal(first.guideUrl, `${base}/agent-guide`);
 
@@ -83,6 +94,8 @@ try {
   const firstRead = await jsonRequest("/api/agent/fighter", { headers: firstHeaders });
   assert.equal(firstRead.response.status, 200);
   assert.equal(firstRead.body.fighter.id, first.id);
+  assert.equal(firstRead.body.fighter.templateId, "vanguard");
+  assert.deepEqual(firstRead.body.templates.map((template) => template.id), ["vanguard"]);
   assert.equal(firstRead.body.activeVersion, null);
   assert.equal(firstRead.body.officialRuleset.id, "standard-v2");
   assert.equal(firstRead.body.officialRuleset.observation, "realtime");
@@ -322,15 +335,16 @@ try {
 
 console.log("agent API tests passed");
 
-async function createFighter(name, templateId) {
+async function createFighter(name) {
   const created = await jsonRequest("/api/fighters", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ name, templateId }),
+    body: JSON.stringify({ name }),
   });
   assert.equal(created.response.status, 201);
   return {
     id: created.body.fighter.id,
+    templateId: created.body.fighter.templateId,
     key: created.body.onboarding.fighterKey,
     apiBaseUrl: created.body.onboarding.apiBaseUrl,
     guideUrl: created.body.onboarding.guideUrl,

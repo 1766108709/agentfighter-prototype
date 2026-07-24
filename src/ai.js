@@ -990,9 +990,8 @@ function cancelAllowsMove(cancel, moveId, move) {
 
 function chooseAirMove(moveset, templateId) {
   const moves = Object.values(moveset?.moves ?? {});
-  const preferred = String(templateId).toLowerCase().includes("ember")
-    ? ["airhammer", "naraku"]
-    : ["airtatsu", "air_tatsu", "tatsumaki"];
+  void templateId;
+  const preferred = ["airtatsu", "air_tatsu", "tatsumaki"];
   return moves.find((move) => preferred.some((term) => move.id.toLowerCase().includes(term)))
     ?? moves.find((move) => move.category === "special")
     ?? moves.find((move) => move.strength === "heavy")

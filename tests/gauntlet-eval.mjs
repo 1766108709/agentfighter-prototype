@@ -2,8 +2,8 @@ import assert from "node:assert/strict";
 
 import {
   GAUNTLET_RULES,
+  FIGHTER_ID,
   OPPONENT_IDS,
-  TEMPLATE_LEGS,
   createNeutralAgent,
   evaluateGauntlet,
   formatGauntletText,
@@ -34,7 +34,7 @@ function testOptionValidation() {
     { split: "training", seed: 30_000, samples: 2 },
     { split: "holdout", seed: 69_999, samples: 2 },
     { split: "holdout", seed: 0x1_0000_0000, samples: 2 },
-    { split: "training", seed: 10_000, samples: 3 },
+    { split: "training", seed: 10_000, samples: 0 },
   ]) {
     assert.throws(() => validateGauntletOptions(options));
   }
@@ -43,7 +43,7 @@ function testOptionValidation() {
 
 function testAggregationAndIsolation() {
   const factoryCalls = [];
-  function candidateFactory(template) {
+  function candidateFactory(fighterId) {
     factoryCalls.push([...arguments]);
     return { act() {} };
   }
@@ -53,7 +53,7 @@ function testAggregationAndIsolation() {
     runnerCalls.push({ options, runtime });
     const matches = options.matches;
     const candidateWins = options.agentB === "balanced"
-      ? (options.templateA === "vanguard" ? 1 : 2)
+      ? 2
       : options.agentB === "pressure"
         ? 0
         : matches;
@@ -74,14 +74,12 @@ function testAggregationAndIsolation() {
     { tournamentRunner },
   );
 
-  assert.equal(runnerCalls.length, OPPONENT_IDS.length * TEMPLATE_LEGS.length);
+  assert.equal(runnerCalls.length, OPPONENT_IDS.length);
   assert.deepEqual(factoryCalls, [
-    ["vanguard"], ["ember"],
-    ["vanguard"], ["ember"],
-    ["vanguard"], ["ember"],
+    [FIGHTER_ID], [FIGHTER_ID], [FIGHTER_ID],
   ]);
   for (const { options, runtime } of runnerCalls) {
-    assert.equal(options.matches, 4);
+    assert.equal(options.matches, 8);
     assert.equal(options.difficulty, "hard");
     assert.equal(Object.hasOwn(options, "delay"), false);
     assert.equal(options.bestOf, 3);
@@ -92,30 +90,29 @@ function testAggregationAndIsolation() {
     assert.deepEqual(Object.keys(runtime.agents), ["A"]);
   }
 
-  assert.deepEqual(report.opponents.balanced.templates.vanguard, {
-    candidateTemplate: "vanguard",
-    opponentTemplate: "ember",
-    wins: 1,
-    losses: 3,
+  assert.deepEqual(report.opponents.balanced, {
+    fighterId: FIGHTER_ID,
+    wins: 2,
+    losses: 6,
     draws: 0,
-    matches: 4,
+    matches: 8,
     strictWinRate: 0.25,
   });
   assert.equal(report.opponents.pressure.wins, 0);
-  assert.equal(report.opponents.pressure.losses, 6);
-  assert.equal(report.opponents.pressure.draws, 2);
+  assert.equal(report.opponents.pressure.losses, 7);
+  assert.equal(report.opponents.pressure.draws, 1);
   assert.equal(report.opponents.pressure.strictWinRate, 0);
   assert.equal(report.opponents.zoner.strictWinRate, 1);
   assert.equal(report.overall.matches, 24);
-  assert.equal(report.overall.wins, 11);
-  assert.equal(report.overall.losses, 11);
-  assert.equal(report.overall.draws, 2);
-  assert.equal(report.overall.strictWinRate, 0.458333);
+  assert.equal(report.overall.wins, 10);
+  assert.equal(report.overall.losses, 13);
+  assert.equal(report.overall.draws, 1);
+  assert.equal(report.overall.strictWinRate, 0.416667);
 
   const rendered = formatGauntletText(report);
   for (const opponent of OPPONENT_IDS) assert(rendered.includes(opponent));
-  assert(rendered.includes("candidate vanguard vs ember"));
-  assert(rendered.includes("candidate ember vs vanguard"));
+  assert(rendered.includes(`fighter=${FIGHTER_ID}`));
+  assert(!rendered.includes("template"));
 }
 
 function testNoArgumentFactory() {
@@ -129,10 +126,10 @@ function testNoArgumentFactory() {
     { samples: 2, split: "holdout", seed: 70_000 },
     { tournamentRunner: (options) => ({ matches: options.matches, wins: { A: 0, B: 0, draw: options.matches } }) },
   );
-  assert.deepEqual(argumentCounts, [0, 0, 0, 0, 0, 0]);
+  assert.deepEqual(argumentCounts, [0, 0, 0]);
   assert.throws(
     () => evaluateGauntlet(function invalidFactory(first, second) { return { act() {} }; }),
-    /zero parameters or one template parameter/,
+    /zero parameters or one fighter-id parameter/,
   );
 }
 
@@ -154,12 +151,7 @@ function testPublicNeutralAgent() {
     const entry = report.opponents[opponent];
     assert.equal(entry.matches, 2);
     assert.equal(entry.wins + entry.losses + entry.draws, 2);
-    for (const leg of TEMPLATE_LEGS) {
-      const stats = entry.templates[leg.candidateTemplate];
-      assert.equal(stats.matches, 1);
-      assert.equal(stats.wins + stats.losses + stats.draws, 1);
-      assert.equal(stats.strictWinRate, stats.wins);
-    }
+    assert.equal(entry.fighterId, FIGHTER_ID);
   }
 }
 

@@ -46,9 +46,9 @@ must create a new fighter.
 ## Recommended loop
 
 1. `GET /api/agent/fighter` to inspect the fighter, active code, versions, stats,
-   limits, template manifests, and links.
-2. Read the active fighter's template manifest before writing commands, cancels,
-   or resource logic.
+   limits, the move manifest, and links.
+2. Read the 苍流 move manifest before writing commands, cancels, or resource
+   logic.
 3. Draft a complete controller. Preserve useful logic from the active version
    instead of blindly replacing it.
 4. `POST /api/agent/fighter/simulate` with candidate `code`. Simulation does not
@@ -147,9 +147,9 @@ Promises, and conflicting directions are rejected. `api.protocolVersion` is
 Never press left+right or up+down together. Motions are created by returning
 direction/button states across consecutive frames. For example, a quarter
 circle is down, then down+toward, then toward+button. Holding a state for more
-than one frame is allowed. Read the fighter's template manifest for move
-commands, cancel windows, resource costs, and the meaning of `system1` and
-`system2`; those meanings are template-specific.
+than one frame is allowed. Read the fighter's move manifest for commands,
+cancel windows, resource costs, and the meaning of `system1` and `system2`.
+Every fighter currently uses the same 苍流 move set.
 
 Uploaded scripts have no network, filesystem, timer, process, module, or browser
 access. Dynamic `eval`, `Function`, and WebAssembly compilation are disabled.
@@ -179,6 +179,9 @@ self.name/templateId/maxHealth
 opponent.name/templateId/maxHealth
 arena.width/height/floorY/left/right
 ```
+
+`templateId` remains in protocol v1 for compatibility and is currently always
+`"vanguard"` for both fighters. It is not a selectable role or play style.
 
 ### ObservationV1
 
@@ -252,11 +255,11 @@ frames, rounds, termination
 GET /api/agent/fighter
 ```
 
-Returns fighter metadata, active code/version, official stats, API limits,
-templates, built-in opponents, and links. `fighter.versions` contains version
-metadata; `activeVersion.code` contains the complete currently active source.
-Each template has a `manifestUrl`; fetch the active template manifest before
-authoring character-specific commands.
+Returns fighter metadata, active code/version, official stats, API limits, the
+苍流 move manifest, built-in opponents, and links. `fighter.versions` contains
+version metadata; `activeVersion.code` contains the complete currently active
+source. Fetch the returned `manifestUrl` before authoring move-specific
+commands. There is no character-template choice.
 
 ### Simulate candidate code
 

@@ -66,7 +66,7 @@ for (const horizontal of ["left", "right"]) {
   const crouchIntegrationGame = createGame({
     roundTimeSeconds: 10,
     playerTemplate: "vanguard",
-    aiTemplate: "ember",
+    aiTemplate: "vanguard",
   });
   stepGame(crouchIntegrationGame, {
     p1: { down: true, [horizontal]: true, lp: true },
@@ -140,7 +140,7 @@ assert.equal(matchCommandInput(authoredJumpHeavy, {
 const airIntegrationGame = createGame({
   roundTimeSeconds: 10,
   playerTemplate: "vanguard",
-  aiTemplate: "ember",
+  aiTemplate: "vanguard",
 });
 stepGame(airIntegrationGame, { p1: { up: true, right: true }, p2: {} });
 assert.equal(airIntegrationGame.fighters[0].onGround, false);
@@ -212,7 +212,7 @@ assert(matchCommandInput(VANGUARD_MOVESET.moves.hadokenOD, {
 const alternativeIntegrationGame = createGame({
   roundTimeSeconds: 10,
   playerTemplate: "vanguard",
-  aiTemplate: "ember",
+  aiTemplate: "vanguard",
 });
 for (const p1 of [
   { down: true },
@@ -301,7 +301,7 @@ assert(commandMatches(
 const rushIntegrationGame = createGame({
   roundTimeSeconds: 10,
   playerTemplate: "vanguard",
-  aiTemplate: "ember",
+  aiTemplate: "vanguard",
 });
 for (const p1 of [
   { mp: true, mk: true },

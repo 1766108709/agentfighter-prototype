@@ -17,8 +17,6 @@ const longFormat = await runSandboxMatch({
   matchId: "derived-frame-budget",
   codeA: NEUTRAL_AGENT,
   opponentPreset: "pressure",
-  templateA: "vanguard",
-  templateB: "ember",
   roundSeconds: 300,
   bestOf: 9,
   recordReplay: false,
@@ -40,8 +38,6 @@ const explicitlyCapped = await runSandboxMatch({
   matchId: "explicit-frame-budget",
   codeA: NEUTRAL_AGENT,
   opponentPreset: "pressure",
-  templateA: "vanguard",
-  templateB: "ember",
   roundSeconds: 300,
   bestOf: 9,
   maxFramesPerMatch: 60,
@@ -56,5 +52,15 @@ assert.equal(
 );
 assert.equal(explicitlyCapped.summary.results[0].frames, 60);
 assert.equal(explicitlyCapped.summary.results[0].termination, "frameLimit");
+assert.deepEqual(explicitlyCapped.summary.templates, { A: "vanguard", B: "vanguard" });
+await assert.rejects(
+  runSandboxMatch({
+    codeA: NEUTRAL_AGENT,
+    templateA: "ember",
+    maxFramesPerMatch: 1,
+  }),
+  (error) => error?.code === "REMOVED_OPTION" && /templateA\/templateB have been removed/.test(error.message),
+  "the removed dual-template sandbox options must fail explicitly",
+);
 
 console.log("match worker frame-budget tests passed");

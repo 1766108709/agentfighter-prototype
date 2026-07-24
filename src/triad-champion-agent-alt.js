@@ -1,5 +1,4 @@
 import { VANGUARD_MOVESET } from "./movesets/vanguard.js";
-import { EMBER_MOVESET } from "./movesets/ember.js";
 
 const ACTION_KEYS = Object.freeze([
   "left", "right", "up", "down",
@@ -9,23 +8,16 @@ const ACTION_KEYS = Object.freeze([
 
 const DIRECTIONS = Object.freeze({
   qcf: Object.freeze(["down", "downForward", "forward"]),
-  qcb: Object.freeze(["down", "downBack", "back"]),
   dp: Object.freeze(["forward", "down", "downForward"]),
-  hcb: Object.freeze(["forward", "downForward", "down", "downBack", "back"]),
-  qcfQcf: Object.freeze(["down", "downForward", "forward", "down", "downForward", "forward"]),
 });
 
 // Both sources are the public roster frame tables. Move ids are used only to
 // estimate an already-visible move's timing and hit level.
 const PUBLIC_MOVES = new Map([
   ...Object.entries(VANGUARD_MOVESET.moves),
-  ...Object.entries(EMBER_MOVESET.moves),
 ]);
 
-const EMBER_WALK_THROW = true;
-
-export function createTriadChampionAgentAlt(templateHint = "") {
-  let ownTemplate = ownTemplateValue(templateHint);
+export function createTriadChampionAgentAlt() {
   let queue = [];
   let plan = "";
   let roundNumber = 0;
@@ -38,8 +30,7 @@ export function createTriadChampionAgentAlt(templateHint = "") {
   let wakeupQueued = false;
   let guardCancelUntil = -1;
 
-  function reset(info) {
-    ownTemplate = ownTemplateValue(info?.self?.templateId) || ownTemplate;
+  function reset() {
     queue = [];
     plan = "";
     roundNumber = 0;
@@ -58,7 +49,6 @@ export function createTriadChampionAgentAlt(templateHint = "") {
       return actionV1();
     }
 
-    ownTemplate = ownTemplateValue(observation.self?.templateId) || ownTemplate;
     if (observation.phase !== "fighting") {
       clearPlan();
       return actionV1();
@@ -97,9 +87,7 @@ export function createTriadChampionAgentAlt(templateHint = "") {
       clearPlan();
       if (canGuardCancel(observation, gap)) {
         guardCancelUntil = observation.frame + 90;
-        return ownTemplate === "vanguard"
-          ? directionAction(observation, "forward", { hp: true, hk: true, guard: true })
-          : directionAction(observation, "neutral", { hp: true, hk: true, guard: true });
+        return directionAction(observation, "forward", { hp: true, hk: true, guard: true });
       }
       return defend(observation, visibleHitLevel(foe), gap);
     }
@@ -113,7 +101,7 @@ export function createTriadChampionAgentAlt(templateHint = "") {
         return directionAction(
           observation,
           "forward",
-          ownTemplate === "vanguard" ? { hk: true } : { hp: true },
+          { hk: true },
         );
       }
       return directionAction(observation, gap < 44 ? "back" : "forward", { guard: gap < 44 });
@@ -164,15 +152,11 @@ export function createTriadChampionAgentAlt(templateHint = "") {
 
     if (protectLead(observation, gap)) {
       if (gap < 190) return directionAction(observation, "downBack", { guard: true });
-      if (ownTemplate === "vanguard") {
-        startMotion("qcf", ["lp"], "lead-projectile", 2);
-        return takeQueued(observation);
-      }
-      return directionAction(observation, "back", { guard: true });
+      startMotion("qcf", ["lp"], "lead-projectile", 2);
+      return takeQueued(observation);
     }
 
-    if (ownTemplate === "ember") chooseEmber(observation, gap);
-    else chooseVanguard(observation, gap);
+    chooseVanguard(observation, gap);
     return queue.length > 0 ? takeQueued(observation) : actionV1();
   }
 
@@ -191,14 +175,11 @@ export function createTriadChampionAgentAlt(templateHint = "") {
   function knockedDownAction(observation) {
     const self = observation.self;
     const remaining = self.state.knockdownFrames;
-    const useReversal = knockdownCount % 3 === 1 && (
-      ownTemplate === "vanguard" ? self.resources.drive >= 200 : self.resources.super >= 50
-    );
+    const useReversal = knockdownCount % 3 === 1 && self.resources.drive >= 200;
 
     if (!wakeupQueued && useReversal && remaining > 0 && remaining <= 2) {
       wakeupQueued = true;
-      if (ownTemplate === "vanguard") startMotion("dp", ["lp", "mp"], "wakeup-od", 2);
-      else startMotion("dp", ["lp", "hp"], "wakeup-ex", 2);
+      startMotion("dp", ["lp", "mp"], "wakeup-od", 2);
     }
     if (wakeupQueued && queue.length > 0) return takeQueued(observation);
     return directionAction(observation, "downBack", { guard: true, lp: true, lk: true });
@@ -209,7 +190,7 @@ export function createTriadChampionAgentAlt(templateHint = "") {
     const self = observation.self;
     const guardRatio = ratio(self.resources.guard, self.resources.guardMax);
     if (guardRatio > 0.56) return false;
-    return ownTemplate === "vanguard" ? self.resources.drive >= 200 : self.resources.super >= 100;
+    return self.resources.drive >= 200;
   }
 
   function projectileResponse(observation, projectile, gap) {
@@ -229,22 +210,6 @@ export function createTriadChampionAgentAlt(templateHint = "") {
         : null;
     }
 
-    if (ownTemplate === "ember") {
-      if (projectile.framesAway >= 17 && projectile.framesAway <= 46 && gap > 64) {
-        queue = [];
-        startJump("projectile-jump");
-        return takeQueued(observation);
-      }
-      if (projectile.framesAway < 17) {
-        clearPlan();
-        return directionAction(observation, "downBack", { guard: true });
-      }
-      if (gap > 205 && projectile.framesAway > 46) {
-        return directionAction(observation, "forward", { guard: false });
-      }
-      return null;
-    }
-
     if (projectile.framesAway <= 13) {
       clearPlan();
       return directionAction(observation, "downBack", { mp: true, mk: true, system1: true, guard: true });
@@ -254,27 +219,19 @@ export function createTriadChampionAgentAlt(templateHint = "") {
 
   function startAntiAir(observation) {
     const self = observation.self;
-    if (ownTemplate === "vanguard") {
-      if (self.resources.drive >= 200) startMotion("dp", ["lp", "mp"], "anti-air-od", 2);
-      else startMotion("dp", ["lp"], "anti-air", 2);
-    } else if (self.resources.super >= 50) {
-      startMotion("dp", ["lp", "hp"], "anti-air-ex", 2);
-    } else {
-      startMotion("dp", ["lp"], "anti-air", 2);
-    }
+    if (self.resources.drive >= 200) startMotion("dp", ["lp", "mp"], "anti-air-od", 2);
+    else startMotion("dp", ["lp"], "anti-air", 2);
   }
 
   function shouldReversal(observation, threat, gap) {
     if (gap > 102 || !threat.late) return false;
     const self = observation.self;
-    if (ownTemplate === "ember") return self.resources.super >= 50;
     if ((choiceCounter + observation.round.number) % 4 !== 0) return false;
     return self.resources.drive >= 200;
   }
 
   function startReversal(observation) {
-    if (ownTemplate === "vanguard") startMotion("dp", ["lp", "mp"], "od-reversal", 2);
-    else startMotion("dp", ["lp", "hp"], "ex-reversal", 2);
+    startMotion("dp", ["lp", "mp"], "od-reversal", 2);
   }
 
   function chooseOkizeme(observation, gap) {
@@ -283,34 +240,15 @@ export function createTriadChampionAgentAlt(templateHint = "") {
       return;
     }
     const pick = nextChoice(4);
-    if (ownTemplate === "vanguard") {
-      if (pick === 0 && gap < 58) startTap("forward", { lp: true, lk: true }, "meaty-throw", 2);
-      else if (pick === 1) startVanguardJabString();
-      else startTap("down", { lk: true }, "meaty-low", 2);
-    } else if (pick === 0 && gap < 58) {
-      startTap("forward", { hp: true }, "meaty-throw", 2);
-    } else if (pick === 1 && observation.self.resources.super >= 50) {
-      startMotion("hcb", ["lk", "hk"], "meaty-command-grab", 2);
-    } else {
-      startEmberHeavyString();
-    }
+    if (pick === 0 && gap < 58) startTap("forward", { lp: true, lk: true }, "meaty-throw", 2);
+    else if (pick === 1) startVanguardJabString();
+    else startTap("down", { lk: true }, "meaty-low", 2);
   }
 
   function startPunish(observation, gap) {
-    const self = observation.self;
-    if (ownTemplate === "vanguard") {
-      if (gap < 72) startVanguardHeavyString();
-      else if (gap < 126) startVanguardMediumString();
-      else startTap("neutral", { hk: true }, "long-punish", 2);
-      return;
-    }
-    if (gap < 62 && self.resources.super >= 50 && nextChoice(3) === 0) {
-      startMotion("hcb", ["lk", "hk"], "command-grab-punish", 2);
-    } else if (gap < 84) {
-      startEmberHeavyString();
-    } else {
-      startTap("neutral", { hp: true }, "far-heavy-punish", 2);
-    }
+    if (gap < 72) startVanguardHeavyString();
+    else if (gap < 126) startVanguardMediumString();
+    else startTap("neutral", { hk: true }, "long-punish", 2);
   }
 
   function chooseVanguard(observation, gap) {
@@ -348,56 +286,6 @@ export function createTriadChampionAgentAlt(templateHint = "") {
     else startVanguardMediumString();
   }
 
-  function chooseEmber(observation, gap) {
-    if (EMBER_WALK_THROW) {
-      if (gap > 58) {
-        enqueue("measured-walk", hold("forward", gap > 180 ? 6 : 3));
-      } else if (nextChoice(4) < 3) {
-        enqueue("close-throw", [
-          inputStep("forward", { throw: true }),
-          inputStep("neutral"),
-          ...hold("downBack", 3, { guard: true }),
-        ]);
-      } else {
-        enqueue("close-cover", hold("downBack", 3, { guard: true }));
-      }
-      return;
-    }
-
-    const self = observation.self;
-    const pick = nextChoice(16);
-
-    if (gap > 218) {
-      if (pick < 2) startJump("far-jump");
-      else if (pick < 6) startMotion("qcf", ["lk"], "advancing-kick", 2);
-      else enqueue("far-dash", dashEntries("forward", 6));
-      return;
-    }
-
-    if (gap > 126) {
-      if (pick < 4) startJump("mid-jump");
-      else if (pick < 9) startTap("neutral", { hp: true }, "far-heavy", 2);
-      else if (pick < 13) startMotion("qcf", ["lk"], "kai", 2);
-      else enqueue("mid-dash", dashEntries("forward", 5));
-      return;
-    }
-
-    if (gap > 67) {
-      if (pick < 6) startTap("down", { hk: true }, "sweep", 2);
-      else if (pick < 12) startTap("neutral", { hp: true }, "heavy-poke", 2);
-      else startMotion("qcf", ["lp"], "rekka-entry", 2);
-      return;
-    }
-
-    const guarding = observation.opponent.state.blockstunFrames > 0
-      || ["guard", "block", "parry"].some((word) => observation.opponent.state.action.includes(word));
-    const throwLine = guarding ? 7 : 4;
-    if (pick < throwLine && gap < 58) startTap("forward", { throw: true }, "throw", 2);
-    else if (pick < 12) startEmberHeavyString();
-    else if (self.resources.super >= 50 && pick < 14) startMotion("hcb", ["lk", "hk"], "command-grab", 2);
-    else startEmberLowString();
-  }
-
   function startVanguardJabString() {
     enqueue("jab-projectile", [
       inputStep("neutral", { lp: true }),
@@ -429,28 +317,6 @@ export function createTriadChampionAgentAlt(templateHint = "") {
       inputStep("neutral", { hp: true }),
       ...hold("neutral", 5),
       ...motionEntries("qcf", ["hp"]),
-      ...hold("neutral", 3),
-    ]);
-  }
-
-  function startEmberHeavyString() {
-    enqueue("heavy-rekka", [
-      inputStep("neutral", { hp: true }),
-      ...motionEntries("qcf", ["lp"]),
-      ...hold("neutral", 7),
-      ...motionEntries("qcf", ["lp"]),
-      ...hold("neutral", 7),
-      inputStep("neutral", { lk: true }),
-      ...hold("neutral", 2),
-    ]);
-  }
-
-  function startEmberLowString() {
-    enqueue("low-rekka", [
-      inputStep("down", { lk: true }),
-      ...hold("neutral", 2),
-      inputStep("down", { lp: true }),
-      ...motionEntries("qcf", ["lp"]),
       ...hold("neutral", 3),
     ]);
   }
@@ -491,10 +357,6 @@ export function createTriadChampionAgentAlt(templateHint = "") {
   }
 
   return Object.freeze({ reset, act, end() { clearPlan(); } });
-}
-
-function ownTemplateValue(value) {
-  return value === "ember" || value === "vanguard" ? value : "";
 }
 
 function visibleThreat(fighter, gap) {

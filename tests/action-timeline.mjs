@@ -65,7 +65,7 @@ function expectedPhase(move, authoredFrame, activeFrames) {
 function createSeparatedGame(templateId) {
   const game = createGame({
     playerTemplate: templateId,
-    aiTemplate: templateId === "vanguard" ? "ember" : "vanguard",
+    aiTemplate: "vanguard",
     roundTimeSeconds: 30,
   });
   game.fighters[0].x = 280;
@@ -216,7 +216,7 @@ function verifyMoveTimeline({
 }
 
 verifyMoveTimeline({
-  label: "Vanguard standing light punch",
+  label: "苍流 standing light punch",
   templateId: "vanguard",
   moveId: "standLightPunch",
   startInputs: [{ lp: true }],
@@ -230,21 +230,7 @@ verifyMoveTimeline({
 });
 
 verifyMoveTimeline({
-  label: "Ember far light punch",
-  templateId: "ember",
-  moveId: "farA",
-  startInputs: [{ lp: true }],
-  expectedPhaseCounts: {
-    startup: 5,
-    active: 2,
-    gap: 0,
-    recovery: 14,
-  },
-  verifyStrikeGeometry: true,
-});
-
-verifyMoveTimeline({
-  label: "Vanguard axe kick multi-window attack",
+  label: "苍流 axe kick multi-window attack",
   templateId: "vanguard",
   moveId: "axeKick",
   startInputs: [{ left: true, hk: true }],

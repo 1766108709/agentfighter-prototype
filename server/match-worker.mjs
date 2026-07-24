@@ -32,8 +32,6 @@ try {
     matches: 1,
     agentA: "balanced",
     agentB: request.opponentPreset,
-    templateA: request.templateA,
-    templateB: request.templateB,
     difficulty: request.difficulty,
     seed: request.seed,
     roundSeconds: request.roundSeconds,
@@ -57,6 +55,9 @@ function validateRequest(value) {
   if (Object.hasOwn(value, "delay")) {
     throw new TypeError("delay has been removed; observations are always real-time");
   }
+  if (Object.hasOwn(value, "templateA") || Object.hasOwn(value, "templateB")) {
+    throw new TypeError("templateA/templateB have been removed; both sides always use vanguard (苍流)");
+  }
   if (typeof value.codeA !== "string") throw new TypeError("match request requires codeA");
   if (value.codeB !== null && value.codeB !== undefined && typeof value.codeB !== "string") {
     throw new TypeError("codeB must be a string or null");
@@ -75,8 +76,6 @@ function validateRequest(value) {
     codeA: value.codeA,
     codeB: value.codeB ?? null,
     opponentPreset: enumValue(value.opponentPreset, ["balanced", "pressure", "zoner"], "balanced"),
-    templateA: enumValue(value.templateA, ["vanguard", "ember"], "vanguard"),
-    templateB: enumValue(value.templateB, ["vanguard", "ember"], "ember"),
     difficulty: enumValue(value.difficulty, ["easy", "normal", "hard", "expert"], "normal"),
     seed: integer(value.seed, 0, 0xffffffff, 1),
     roundSeconds,

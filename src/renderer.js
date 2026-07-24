@@ -1994,9 +1994,7 @@ function drawHud(ctx, game, fighters, hudState, deltaMs) {
     const superGauge = readGauge(fighter, "super");
     const driveGauge = readGauge(fighter, "drive");
     const guardGauge = readGauge(fighter, "guard");
-    const secondaryGauge = String(fighter?.templateId ?? "").toLowerCase() === "ember"
-      ? (guardGauge ?? driveGauge)
-      : (driveGauge ?? guardGauge);
+    const secondaryGauge = driveGauge ?? guardGauge;
     drawResourceGauge(ctx, { x, y: 80, width: 300, height: 14, gauge: superGauge, flip });
     drawResourceGauge(ctx, {
       x,

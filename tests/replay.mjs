@@ -54,8 +54,9 @@ const game = createGame({
   roundSeconds: 10,
   maxHealth: 300,
   playerTemplate: "vanguard",
-  aiTemplate: "ember",
+  aiTemplate: "vanguard",
 });
+assert(game.fighters.every((fighter) => fighter.templateId === "vanguard"));
 const leftAI = createScriptAI({
   preset: "pressure",
   difficulty: "hard",

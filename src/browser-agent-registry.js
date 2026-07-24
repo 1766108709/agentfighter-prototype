@@ -29,7 +29,7 @@ export function createCustomBrowserAgent(id, options = {}) {
   assertRealtimeObservation(options);
 
   const metadata = CUSTOM_BROWSER_AGENTS[id];
-  const runner = createInProcessAgentRunner(createTriadChampionAgentAlt(options.templateId));
+  const runner = createInProcessAgentRunner(createTriadChampionAgentAlt());
 
   runner.name = metadata.name;
   runner.description = metadata.description;

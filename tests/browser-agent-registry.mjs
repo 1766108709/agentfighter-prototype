@@ -12,7 +12,7 @@ import {
   customBrowserAgentMetadata,
 } from "../src/browser-agent-registry.js";
 
-const EXPECTED_CHAMPION_SHA256 = "798c3a17845a8123c0deac9df77aca5b81b0e8cbe4095b4264daa6ad46ec6bb1";
+const EXPECTED_CHAMPION_SHA256 = "4ef71745242caa02d8ada982e1456a179282604b413a418e39dc1dfb0edc9f46";
 const BUILT_IN_IDS = ["balanced", "pressure", "zoner"];
 
 function optionValues(html, selectId) {
@@ -31,18 +31,16 @@ const game = createGame({
   bestOf: 3,
   roundTimeSeconds: 60,
   playerTemplate: "vanguard",
-  aiTemplate: "ember",
+  aiTemplate: "vanguard",
 });
-const agent = createCustomBrowserAgent(TRIAD_CHAMPION_AGENT_ID, {
-  templateId: "ember",
-});
+const agent = createCustomBrowserAgent(TRIAD_CHAMPION_AGENT_ID);
 assert.equal(agent.name, "自适应型 · Triad");
 assert.equal(agent.browserAgentId, TRIAD_CHAMPION_AGENT_ID);
 assert.equal(Object.hasOwn(agent, "observationDelayFrames"), false);
 assert.equal(typeof agent.decide, "function");
 assert.equal(typeof agent.resetForMatch, "function");
 agent.resetForMatch(game, 1, { seed: 20260720 });
-assert.equal(agent.matchInfo.self.templateId, "ember");
+assert.equal(agent.matchInfo.self.templateId, "vanguard");
 const input = agent.decide(game, 1);
 assert.equal(typeof input, "object");
 assert.equal(Object.keys(input).length, 14);
@@ -56,17 +54,14 @@ const mainSource = await readFile(new URL("../src/main.js", import.meta.url), "u
 assert.match(mainSource, /createBrowserAgent\(preset,/);
 assert.doesNotMatch(mainSource, /\bcreateScriptAI\s*\(/, "browser must not bypass the Agent V1 boundary");
 assert.doesNotMatch(mainSource, /observationDelayFrames|delay-select/, "browser runtime must not expose observation delay");
-assert.match(mainSource, /config\.rightTemplate/);
-assert.match(mainSource, /config\.leftTemplate/);
+assert.doesNotMatch(mainSource, /#(?:left|right)-template-select/, "browser must not expose a fighter picker");
 
 function runRealtimeBrowserMatch(seeds) {
   const left = createBrowserAgent("pressure", {
-    templateId: "vanguard",
     difficulty: "normal",
     seed: seeds.left,
   });
   const right = createBrowserAgent(TRIAD_CHAMPION_AGENT_ID, {
-    templateId: "ember",
     difficulty: "normal",
     seed: seeds.right,
   });
@@ -76,7 +71,7 @@ function runRealtimeBrowserMatch(seeds) {
     playerName: left.name,
     aiName: right.name,
     playerTemplate: "vanguard",
-    aiTemplate: "ember",
+    aiTemplate: "vanguard",
   });
   left.resetForMatch(match, 0, { seed: seeds.left });
   right.resetForMatch(match, 1, { seed: seeds.right });
@@ -120,7 +115,6 @@ assert.notDeepEqual(rematchSeeds, oldFixedSeeds, "rematch must rebuild runners w
 
 for (const id of [...BUILT_IN_IDS, TRIAD_CHAMPION_AGENT_ID]) {
   const runner = createBrowserAgent(id, {
-    templateId: "vanguard",
     difficulty: "normal",
     seed: 7,
   });

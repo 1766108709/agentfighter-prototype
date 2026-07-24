@@ -27,10 +27,6 @@ const matchOverlay = document.querySelector("#match-overlay");
 const roundBanner = document.querySelector("#round-banner");
 const statusNode = document.querySelector("#runtime-status");
 const modeSelect = document.querySelector("#mode-select");
-const leftTemplateSelect = document.querySelector("#left-template-select");
-const rightTemplateSelect = document.querySelector("#right-template-select");
-const leftTemplateLabel = document.querySelector("#left-template-label");
-const rightTemplateLabel = document.querySelector("#right-template-label");
 const leftAgentRow = document.querySelector("#left-agent-row");
 const leftAgentSelect = document.querySelector("#left-agent-select");
 const rightAgentLabel = document.querySelector("#right-agent-label");
@@ -618,13 +614,6 @@ function presetName(key) {
   return customBrowserAgentMetadata(key)?.name || AI_PRESETS?.[key]?.name || key || "SCRIPT AI";
 }
 
-function templateName(key) {
-  return {
-    vanguard: "苍流",
-    ember: "赤锋",
-  }[key] || key || "角色";
-}
-
 const MOVE_CATEGORY_ORDER = Object.freeze(["normal", "special", "ex", "super", "throw", "system", "other"]);
 const MOVE_CATEGORY_LABELS = Object.freeze({
   normal: "普通技",
@@ -726,13 +715,11 @@ function frameLabelFor(move) {
   return `S${startup} · A${activeWindowLabel(move)} · R${recoveryLabel}`;
 }
 
-function renderMoveDataList(config = readMatchConfig()) {
+function renderMoveDataList() {
   if (!moveDataList) return;
   moveDataList.replaceChildren();
-  const templateIds = [...new Set([config.leftTemplate, config.rightTemplate])]
-    .filter((templateId) => MOVESETS?.[templateId] && typeof MOVESETS[templateId] === "object");
-
-  if (templateIds.length === 0) {
+  const moveset = MOVESETS?.vanguard;
+  if (!moveset || typeof moveset !== "object") {
     const empty = document.createElement("p");
     empty.className = "move-data-empty";
     empty.textContent = "暂无可用出招数据";
@@ -740,56 +727,54 @@ function renderMoveDataList(config = readMatchConfig()) {
     return;
   }
 
-  for (const templateId of templateIds) {
-    const section = document.createElement("section");
-    section.className = `move-data-template ${templateId === "ember" ? "is-ember" : "is-vanguard"}`;
-    const heading = document.createElement("h3");
-    heading.textContent = `${templateName(templateId)} · ${String(templateId).toUpperCase()}`;
-    section.append(heading);
+  const section = document.createElement("section");
+  section.className = "move-data-template is-vanguard";
+  const heading = document.createElement("h3");
+  heading.textContent = "苍流";
+  section.append(heading);
 
-    const groups = new Map();
-    const authoredMoves = MOVESETS[templateId].moves ?? MOVESETS[templateId];
-    for (const [action, move] of Object.entries(authoredMoves)) {
-      if (!move || typeof move !== "object") continue;
-      const category = moveCategory(action, move);
-      if (!groups.has(category)) groups.set(category, []);
-      groups.get(category).push({ action, move });
-    }
-
-    for (const category of MOVE_CATEGORY_ORDER) {
-      const moves = groups.get(category);
-      if (!moves?.length) continue;
-      moves.sort((a, b) => {
-        const orderA = Number.isFinite(a.move?.order) ? a.move.order : Number.MAX_SAFE_INTEGER;
-        const orderB = Number.isFinite(b.move?.order) ? b.move.order : Number.MAX_SAFE_INTEGER;
-        return orderA - orderB || a.action.localeCompare(b.action);
-      });
-      const group = document.createElement("div");
-      group.className = "move-data-group";
-      const label = document.createElement("h4");
-      label.textContent = MOVE_CATEGORY_LABELS[category] ?? MOVE_CATEGORY_LABELS.other;
-      group.append(label);
-
-      for (const { action, move } of moves) {
-        const row = document.createElement("div");
-        row.className = "move-data-row";
-        const command = document.createElement("code");
-        command.textContent = commandLabelFor(action, move);
-        const details = document.createElement("span");
-        details.className = "move-data-details";
-        const name = document.createElement("strong");
-        name.textContent = String(move.name ?? action);
-        const meta = document.createElement("small");
-        meta.textContent = [frameLabelFor(move), resourceLabelFor(move)].filter(Boolean).join(" · ");
-        details.append(name);
-        if (meta.textContent) details.append(meta);
-        row.append(command, details);
-        group.append(row);
-      }
-      section.append(group);
-    }
-    moveDataList.append(section);
+  const groups = new Map();
+  const authoredMoves = moveset.moves ?? moveset;
+  for (const [action, move] of Object.entries(authoredMoves)) {
+    if (!move || typeof move !== "object") continue;
+    const category = moveCategory(action, move);
+    if (!groups.has(category)) groups.set(category, []);
+    groups.get(category).push({ action, move });
   }
+
+  for (const category of MOVE_CATEGORY_ORDER) {
+    const moves = groups.get(category);
+    if (!moves?.length) continue;
+    moves.sort((a, b) => {
+      const orderA = Number.isFinite(a.move?.order) ? a.move.order : Number.MAX_SAFE_INTEGER;
+      const orderB = Number.isFinite(b.move?.order) ? b.move.order : Number.MAX_SAFE_INTEGER;
+      return orderA - orderB || a.action.localeCompare(b.action);
+    });
+    const group = document.createElement("div");
+    group.className = "move-data-group";
+    const label = document.createElement("h4");
+    label.textContent = MOVE_CATEGORY_LABELS[category] ?? MOVE_CATEGORY_LABELS.other;
+    group.append(label);
+
+    for (const { action, move } of moves) {
+      const row = document.createElement("div");
+      row.className = "move-data-row";
+      const command = document.createElement("code");
+      command.textContent = commandLabelFor(action, move);
+      const details = document.createElement("span");
+      details.className = "move-data-details";
+      const name = document.createElement("strong");
+      name.textContent = String(move.name ?? action);
+      const meta = document.createElement("small");
+      meta.textContent = [frameLabelFor(move), resourceLabelFor(move)].filter(Boolean).join(" · ");
+      details.append(name);
+      if (meta.textContent) details.append(meta);
+      row.append(command, details);
+      group.append(row);
+    }
+    section.append(group);
+  }
+  moveDataList.append(section);
 }
 
 function selectedMode() {
@@ -797,7 +782,7 @@ function selectedMode() {
 }
 
 function isTodShowcase(config = activeMatchConfig) {
-  return config?.showcase === "ember-tod";
+  return config?.showcase === "cangliu-tod";
 }
 
 function readMatchConfig() {
@@ -805,8 +790,6 @@ function readMatchConfig() {
   return {
     mode,
     showcase: null,
-    leftTemplate: leftTemplateSelect?.value || "vanguard",
-    rightTemplate: rightTemplateSelect?.value || "ember",
     leftPreset: mode === "ai-vs-ai" ? (leftAgentSelect?.value || "balanced") : null,
     rightPreset: agentSelect?.value || "balanced",
     difficulty: difficultySelect?.value || "normal",
@@ -820,8 +803,6 @@ function sameMatchConfig(a, b) {
     a && b &&
     a.mode === b.mode &&
     a.showcase === b.showcase &&
-    a.leftTemplate === b.leftTemplate &&
-    a.rightTemplate === b.rightTemplate &&
     a.leftPreset === b.leftPreset &&
     a.rightPreset === b.rightPreset &&
     a.difficulty === b.difficulty &&
@@ -830,9 +811,8 @@ function sameMatchConfig(a, b) {
   );
 }
 
-function createSelectedAI(preset, seed, config, templateId) {
+function createSelectedAI(preset, seed, config) {
   return createBrowserAgent(preset, {
-    templateId,
     difficulty: config.difficulty,
     seed,
   });
@@ -852,7 +832,7 @@ function resetMatchAgents(options) {
 }
 
 function activeLeftName() {
-  if (isTodShowcase()) return "赤锋 · TOD SCRIPT";
+  if (isTodShowcase()) return "苍流 · TOD SCRIPT";
   return activeMatchConfig?.mode === "ai-vs-ai"
     ? (leftScriptAI?.name || game?.fighters?.[0]?.name || "LEFT AI")
     : "YOU";
@@ -894,17 +874,15 @@ function createFreshGame(config = readMatchConfig(), matchSeeds = browserMatchSe
   statusNode.classList.remove("showcase");
   if (rematchButton) rematchButton.textContent = "再来一局";
   if (changeAgentButton) changeAgentButton.textContent = "换个 Agent";
-  rightScriptAI = createSelectedAI(config.rightPreset, matchSeeds.right, config, config.rightTemplate);
+  rightScriptAI = createSelectedAI(config.rightPreset, matchSeeds.right, config);
   leftScriptAI = config.mode === "ai-vs-ai"
-    ? createSelectedAI(config.leftPreset, matchSeeds.left, config, config.leftTemplate)
+    ? createSelectedAI(config.leftPreset, matchSeeds.left, config)
     : null;
   game = createGame({
     bestOf: config.bestOf ?? 3,
     roundTimeSeconds: config.roundTimeSeconds ?? 60,
     playerName: config.mode === "ai-vs-ai" ? (leftScriptAI?.name || "LEFT AI") : "YOU",
     aiName: rightScriptAI?.name || "SCRIPT AI",
-    playerTemplate: config.leftTemplate,
-    aiTemplate: config.rightTemplate,
   });
   resetMatchAgents();
   effectCursor = new Set();
@@ -917,9 +895,7 @@ function createFreshGame(config = readMatchConfig(), matchSeeds = browserMatchSe
 function createFreshTodExhibition() {
   const config = {
     mode: "tod-exhibition",
-    showcase: "ember-tod",
-    leftTemplate: "ember",
-    rightTemplate: "ember",
+    showcase: "cangliu-tod",
     leftPreset: null,
     rightPreset: null,
     difficulty: "expert",
@@ -932,10 +908,8 @@ function createFreshTodExhibition() {
   game = createGame({
     bestOf: 1,
     roundTimeSeconds: 30,
-    playerName: "赤锋 · TOD SCRIPT",
+    playerName: "苍流 · TOD SCRIPT",
     aiName: "训练假人",
-    playerTemplate: "ember",
-    aiTemplate: "ember",
   });
   prepareTodExhibition(game);
   todDirector = createTodExhibitionDirector();
@@ -1067,7 +1041,7 @@ function updateAgentDescription() {
   const pending = readMatchConfig();
   if (isTodShowcase()) {
     agentDescription.textContent = `真实十割表演 · ${TOD_EXHIBITION_ROUTE_LABEL}`;
-    renderMoveDataList({ leftTemplate: "ember", rightTemplate: "ember" });
+    renderMoveDataList();
     applyActiveModePresentation();
     return;
   }
@@ -1078,17 +1052,13 @@ function updateAgentDescription() {
     leftAgentRow.classList.toggle("visible", spectator);
   }
   if (rightAgentLabel) rightAgentLabel.textContent = spectator ? "右侧 Agent" : "对手 Agent";
-  if (leftTemplateLabel) leftTemplateLabel.textContent = spectator ? "左侧模板" : "玩家模板";
-  if (rightTemplateLabel) rightTemplateLabel.textContent = spectator ? "右侧模板" : "对手模板";
-
-  const templateMatchup = `${templateName(pending.leftTemplate)} vs ${templateName(pending.rightTemplate)}`;
 
   if (spectator) {
-    agentDescription.textContent = `${templateMatchup} · ${presetName(pending.leftPreset)} vs ${presetName(pending.rightPreset)}`;
+    agentDescription.textContent = `${presetName(pending.leftPreset)} vs ${presetName(pending.rightPreset)}`;
   } else {
-    agentDescription.textContent = `${templateMatchup} · ${presetDescription(pending.rightPreset)}`;
+    agentDescription.textContent = presetDescription(pending.rightPreset);
   }
-  renderMoveDataList(pending);
+  renderMoveDataList();
 
   const pendingChange = playing && !sameMatchConfig(pending, activeMatchConfig);
   if (pendingChange) {
@@ -1332,8 +1302,6 @@ replayTimeline?.addEventListener("change", () => seekReplay(Number(replayTimelin
 agentSelect.addEventListener("change", updateAgentDescription);
 modeSelect?.addEventListener("change", updateAgentDescription);
 leftAgentSelect?.addEventListener("change", updateAgentDescription);
-leftTemplateSelect?.addEventListener("change", updateAgentDescription);
-rightTemplateSelect?.addEventListener("change", updateAgentDescription);
 difficultySelect?.addEventListener("change", updateAgentDescription);
 
 window.addEventListener("keydown", (event) => {

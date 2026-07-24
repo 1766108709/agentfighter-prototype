@@ -1,6 +1,7 @@
 import { CHARACTER_TEMPLATES, MOVESETS } from "../src/engine.js";
 
-const TEMPLATE_IDS = Object.freeze(Object.keys(CHARACTER_TEMPLATES));
+const TEMPLATE_IDS = Object.freeze(["vanguard"]);
+const PUBLIC_FIGHTER_NAME = "苍流";
 const manifests = new Map();
 
 export function listPublicTemplates() {
@@ -8,8 +9,7 @@ export function listPublicTemplates() {
     const template = CHARACTER_TEMPLATES[templateId];
     return {
       id: template.id,
-      name: template.name,
-      archetype: template.archetype,
+      name: PUBLIC_FIGHTER_NAME,
       controlLayout: template.controlLayout,
       manifestPath: `/api/templates/${template.id}`,
     };
@@ -27,8 +27,7 @@ export function publicTemplateManifest(templateId) {
     schema: "agentfighter.template-manifest",
     version: 1,
     id: template.id,
-    name: template.name,
-    archetype: template.archetype,
+    name: PUBLIC_FIGHTER_NAME,
     controlLayout: template.controlLayout,
     resourceModel: jsonClone(moveset.resourceModel ?? {}),
     aliases: jsonClone(moveset.aliases ?? {}),

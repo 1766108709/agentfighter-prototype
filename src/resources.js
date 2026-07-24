@@ -6,13 +6,6 @@ export const RESOURCE_RULES = Object.freeze({
     driveRegenPerFrame: 0.7,
     driveRegenDelay: 90,
   }),
-  ember: Object.freeze({
-    superMax: 500,
-    driveMax: 0,
-    guardMax: 100,
-    driveRegenPerFrame: 0,
-    driveRegenDelay: 0,
-  }),
 });
 
 export function initializeFighterResources(fighter, templateId, options = {}) {
@@ -111,12 +104,8 @@ export function awardContactResources(attacker, defender, move, outcome, current
   const contactDamage = finite(currentHit?.damage, finite(move?.damage));
   gainSuperMeter(defender, landedHit ? Math.max(2, contactDamage / 40) : 2);
 
-  if (attacker?.templateId === "vanguard") {
-    changeDrive(attacker, landedHit ? 12 : 5);
-    changeDrive(defender, landedHit ? -10 : -finite(move?.driveDamageOnBlock, 18), 90);
-  } else if (!landedHit) {
-    damageGuardGauge(defender, finite(move?.guardDamage, 5));
-  }
+  changeDrive(attacker, landedHit ? 12 : 5);
+  changeDrive(defender, landedHit ? -10 : -finite(move?.driveDamageOnBlock, 18), 90);
 }
 
 export function resourceSnapshot(fighter) {

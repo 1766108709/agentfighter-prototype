@@ -10,6 +10,12 @@ export function runSandboxMatch(options = {}) {
       "REMOVED_OPTION",
     ));
   }
+  if (Object.hasOwn(options, "templateA") || Object.hasOwn(options, "templateB")) {
+    return Promise.reject(new MatchSandboxError(
+      "templateA/templateB have been removed; both sides always use vanguard (苍流)",
+      "REMOVED_OPTION",
+    ));
+  }
   const timeoutMs = boundedInteger(
     options.timeoutMs,
     250,
@@ -23,8 +29,11 @@ export function runSandboxMatch(options = {}) {
       workerData: { ...options, matchId },
       execArgv: process.execArgv.filter((argument) => !argument.startsWith("--input-type")),
       resourceLimits: {
-        maxOldGenerationSizeMb: 64,
-        maxYoungGenerationSizeMb: 16,
+        // A full 30s BO3 records frame-accurate ReplayV1 data in the worker.
+        // Keep the sandbox bounded while leaving enough room for the official
+        // ruleset's worst-case single-character mirror matches.
+        maxOldGenerationSizeMb: 256,
+        maxYoungGenerationSizeMb: 32,
         stackSizeMb: 4,
       },
     });

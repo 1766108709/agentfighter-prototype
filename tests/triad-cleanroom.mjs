@@ -264,7 +264,7 @@ function makeObservation(frame) {
     round: { number: 1, score: { self: 0, opponent: 0 } },
     arena: { width: 960, height: 540, floorY: 460, left: 48, right: 912 },
     self: makeFighter("self", "Same Public Self", "vanguard", frame, selfX, 1),
-    opponent: makeFighter("opponent", "Same Public Opponent", "ember", frame, opponentX, -1),
+    opponent: makeFighter("opponent", "Same Public Opponent", "vanguard", frame, opponentX, -1),
     projectiles: frame >= 54 && frame < 72 ? [{
       id: 17,
       owner: "opponent",
@@ -292,7 +292,7 @@ function makeMatchInfo(identity, index) {
     side: "left",
     selfIndex: 0,
     self: { name: `self-${identity}`, templateId: "vanguard", maxHealth: 10000 },
-    opponent: { name: `opponent-${identity}`, templateId: "ember", maxHealth: 10000 },
+    opponent: { name: `opponent-${identity}`, templateId: "vanguard", maxHealth: 10000 },
     arena: { width: 960, height: 540, floorY: 460, left: 48, right: 912 },
   });
 }
@@ -463,8 +463,6 @@ async function testSymmetricRealtimeObservation() {
     matches: 1,
     agentA: "balanced",
     agentB: "zoner",
-    templateA: "vanguard",
-    templateB: "ember",
     difficulty: "normal",
     seed: 0x51a7,
     roundSeconds: 10,

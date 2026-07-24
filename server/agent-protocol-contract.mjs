@@ -44,8 +44,8 @@ function buildContract() {
     roundSeconds: 30,
     bestOf: 3,
     players: [
-      { name: "Your Fighter", templateId: "vanguard" },
-      { name: "Opponent", templateId: "ember" },
+      { name: "苍流 A", templateId: "vanguard" },
+      { name: "苍流 B", templateId: "vanguard" },
     ],
   });
   game.projectiles.push({

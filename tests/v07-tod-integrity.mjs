@@ -48,8 +48,8 @@ function runFormerPrototypeRoute({ maxHealth, startHealth = maxHealth }) {
     bestOf: 1,
     roundSeconds: 60,
     players: [
-      { templateId: "ember", startingSuperMeter: 500 },
-      { templateId: "ember", maxHealth },
+      { templateId: "vanguard", startingSuperMeter: 300 },
+      { templateId: "vanguard", maxHealth },
     ],
   });
   game.fighters[0].x = right - 65;
@@ -155,4 +155,4 @@ assert.equal(isNaturalTodEvidence({ ...validEvidence, continuous: false }), fals
   assert.equal(game.telemetry.tods[0], 0);
 }
 
-process.stdout.write("v0.7 TOD integrity ok · natural full-life evidence + 1100/900 HP controls\n");
+process.stdout.write("v0.7 苍流 TOD integrity ok · natural full-life evidence + 1100/900 HP controls\n");

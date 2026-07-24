@@ -1,4 +1,4 @@
-import { CHARACTER_TEMPLATES, MOVESETS, createGame, nextRound, stepGame, TICK_RATE } from "./engine.js";
+import { MOVESETS, createGame, nextRound, stepGame, TICK_RATE } from "./engine.js";
 import { AI_PRESETS } from "./ai.js";
 import { TACTICAL_INTENTS } from "./ai-planner.js";
 import { createReplayRecorder } from "./replay.js";
@@ -10,7 +10,9 @@ import {
 } from "./agent-sdk.js";
 
 const AGENT_IDS = Object.freeze(["balanced", "pressure", "zoner"]);
-const TEMPLATE_IDS = Object.freeze(["vanguard", "ember"]);
+const SINGLE_FIGHTER_ID = "vanguard";
+const SINGLE_FIGHTER_NAME = "苍流";
+const REMOVED_TEMPLATE_FLAGS = Object.freeze(new Set(["--template-a", "--template-b"]));
 const DIFFICULTIES = Object.freeze(["easy", "normal", "hard", "expert"]);
 const FORMATS = Object.freeze(["text", "json"]);
 const MAX_MATCHES = 100000;
@@ -19,8 +21,6 @@ export const HEADLESS_DEFAULTS = Object.freeze({
   matches: 100,
   agentA: "balanced",
   agentB: "zoner",
-  templateA: "vanguard",
-  templateB: "ember",
   difficulty: "normal",
   seed: 1,
   roundSeconds: 60,
@@ -38,8 +38,6 @@ export const HEADLESS_HELP = `AgentFighter 无头锦标赛 / Headless Tournament
   --matches <n>          比赛数量，默认 100
   --agent-a <preset>     A 选手：balanced|pressure|zoner
   --agent-b <preset>     B 选手：balanced|pressure|zoner
-  --template-a <id>      A 模板：vanguard|ember，默认 vanguard
-  --template-b <id>      B 模板：vanguard|ember，默认 ember
   --difficulty <level>   easy|normal|hard|expert，默认 normal
   --seed <uint32>        锦标赛确定性种子，默认 1
   --round-seconds <n>    每回合秒数 10-300，默认 60
@@ -67,8 +65,6 @@ export function parseHeadlessArgs(argv = []) {
     ["--matches", "matches"],
     ["--agent-a", "agentA"],
     ["--agent-b", "agentB"],
-    ["--template-a", "templateA"],
-    ["--template-b", "templateB"],
     ["--difficulty", "difficulty"],
     ["--seed", "seed"],
     ["--round-seconds", "roundSeconds"],
@@ -90,6 +86,12 @@ export function parseHeadlessArgs(argv = []) {
 
     const separator = raw.indexOf("=");
     const flag = separator >= 0 ? raw.slice(0, separator) : raw;
+    if (REMOVED_TEMPLATE_FLAGS.has(flag)) {
+      throw new HeadlessArgumentError(
+        `${flag} 已移除；双方固定使用 ${SINGLE_FIGHTER_ID}（${SINGLE_FIGHTER_NAME}）`
+        + ` / ${flag} has been removed; both sides use ${SINGLE_FIGHTER_ID}`,
+      );
+    }
     const property = valueOptions.get(flag);
     if (!property) {
       throw new HeadlessArgumentError(`未知参数 / Unknown option: ${raw}`);
@@ -176,8 +178,8 @@ export function runHeadlessTournament(options = {}, runtime = {}) {
   const wallTimeMs = monotonicNow() - startedAt;
   const simulatedSeconds = totalFrames / TICK_RATE;
   const fps = wallTimeMs > 0 ? totalFrames / (wallTimeMs / 1000) : 0;
-  const participantA = participantSummary("A", config.agentA, config.templateA, wins, actions, telemetry, config.matches, results[0]?.agents?.A, diagnostics.A);
-  const participantB = participantSummary("B", config.agentB, config.templateB, wins, actions, telemetry, config.matches, results[0]?.agents?.B, diagnostics.B);
+  const participantA = participantSummary("A", config.agentA, SINGLE_FIGHTER_ID, wins, actions, telemetry, config.matches, results[0]?.agents?.A, diagnostics.A);
+  const participantB = participantSummary("B", config.agentB, SINGLE_FIGHTER_ID, wins, actions, telemetry, config.matches, results[0]?.agents?.B, diagnostics.B);
   const injectedAgents = Boolean(runtime.agents?.A || runtime.agents?.B || runtime.createAgent);
 
   return {
@@ -194,7 +196,7 @@ export function runHeadlessTournament(options = {}, runtime = {}) {
       B: telemetry.B,
       totals: combinedTelemetry(telemetry.A, telemetry.B),
     },
-    templates: { A: config.templateA, B: config.templateB },
+    templates: { A: SINGLE_FIGHTER_ID, B: SINGLE_FIGHTER_ID },
     participants: { A: participantA, B: participantB },
     diagnostics,
     determinism: {
@@ -211,8 +213,6 @@ export function runHeadlessTournament(options = {}, runtime = {}) {
     settings: {
       agentA: config.agentA,
       agentB: config.agentB,
-      templateA: config.templateA,
-      templateB: config.templateB,
       difficulty: config.difficulty,
       observation: "realtime",
       seed: config.seed,
@@ -264,12 +264,12 @@ function runSingleMatch(config, matchIndex, runtime) {
   let seedB = deriveSeed(config.seed, matchIndex, 0x9e3779b9);
   if (seedB === seedA) seedB = (seedB + 0x6d2b79f5) >>> 0;
 
-  const aiA = createTournamentAI("A", config.agentA, config.templateA, config, seedA, matchIndex, runtime);
-  const aiB = createTournamentAI("B", config.agentB, config.templateB, config, seedB, matchIndex, runtime);
+  const aiA = createTournamentAI("A", config.agentA, SINGLE_FIGHTER_ID, config, seedA, matchIndex, runtime);
+  const aiB = createTournamentAI("B", config.agentB, SINGLE_FIGHTER_ID, config, seedB, matchIndex, runtime);
   const leftAI = left === "A" ? aiA : aiB;
   const rightAI = right === "A" ? aiA : aiB;
-  const leftTemplate = left === "A" ? config.templateA : config.templateB;
-  const rightTemplate = right === "A" ? config.templateA : config.templateB;
+  const leftTemplate = SINGLE_FIGHTER_ID;
+  const rightTemplate = SINGLE_FIGHTER_ID;
   let game = createGame({
     bestOf: config.bestOf,
     roundSeconds: config.roundSeconds,
@@ -405,8 +405,8 @@ function runSingleMatch(config, matchIndex, runtime) {
     left,
     right,
     templates: {
-      A: config.templateA,
-      B: config.templateB,
+      A: SINGLE_FIGHTER_ID,
+      B: SINGLE_FIGHTER_ID,
       ...sideTemplates,
     },
     winner,
@@ -543,14 +543,13 @@ function moveTable(moveset) {
 }
 
 function dynamicActionIds(catalogue) {
-  return [...new Set(
-    Object.values(catalogue ?? {}).flatMap((moveset) => [
-      ...Object.keys(moveTable(moveset)),
-      ...Object.entries(moveset ?? {})
-        .filter(([, move]) => move && typeof move === "object" && Number.isFinite(move.startup))
-        .map(([id]) => id),
-    ]),
-  )].sort();
+  const moveset = catalogue?.[SINGLE_FIGHTER_ID];
+  return [...new Set([
+    ...Object.keys(moveTable(moveset)),
+    ...Object.entries(moveset ?? {})
+      .filter(([, move]) => move && typeof move === "object" && Number.isFinite(move.startup))
+      .map(([id]) => id),
+  ])].sort();
 }
 
 function emptyActionDistribution(actionIds = dynamicActionIds(MOVESETS)) {
@@ -745,7 +744,7 @@ function participantSummary(id, preset, template, wins, actions, telemetry, matc
     source: identity.source ?? "preset",
     determinism: identity.determinism ?? "unverified",
     template,
-    templateName: CHARACTER_TEMPLATES[template]?.name || template,
+    templateName: template === SINGLE_FIGHTER_ID ? SINGLE_FIGHTER_NAME : template,
     wins: wins[id],
     losses: wins[other],
     draws: wins.draw,
@@ -765,12 +764,16 @@ function validateAndNormalize(options, { preserveFormat = false } = {}) {
       "delay 已取消；观测始终实时 / delay has been removed; observations are always real-time",
     );
   }
+  if (Object.hasOwn(options, "templateA") || Object.hasOwn(options, "templateB")) {
+    throw new HeadlessArgumentError(
+      `templateA/templateB 已移除；双方固定使用 ${SINGLE_FIGHTER_ID}（${SINGLE_FIGHTER_NAME}）`
+      + ` / templateA/templateB have been removed; both sides use ${SINGLE_FIGHTER_ID}`,
+    );
+  }
 
   const matches = integerOption(options.matches ?? HEADLESS_DEFAULTS.matches, "matches", 1, MAX_MATCHES);
   const agentA = enumOption(options.agentA ?? HEADLESS_DEFAULTS.agentA, "agent-a", AGENT_IDS);
   const agentB = enumOption(options.agentB ?? HEADLESS_DEFAULTS.agentB, "agent-b", AGENT_IDS);
-  const templateA = enumOption(options.templateA ?? HEADLESS_DEFAULTS.templateA, "template-a", TEMPLATE_IDS);
-  const templateB = enumOption(options.templateB ?? HEADLESS_DEFAULTS.templateB, "template-b", TEMPLATE_IDS);
   const difficulty = enumOption(options.difficulty ?? HEADLESS_DEFAULTS.difficulty, "difficulty", DIFFICULTIES);
   const seed = integerOption(options.seed ?? HEADLESS_DEFAULTS.seed, "seed", 0, 0xffffffff);
   const roundSeconds = integerOption(options.roundSeconds ?? HEADLESS_DEFAULTS.roundSeconds, "round-seconds", 10, 300);
@@ -808,8 +811,6 @@ function validateAndNormalize(options, { preserveFormat = false } = {}) {
     matches,
     agentA,
     agentB,
-    templateA,
-    templateB,
     difficulty,
     seed: seed >>> 0,
     roundSeconds,

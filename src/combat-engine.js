@@ -20,7 +20,6 @@ import {
   awardContactResources,
   gainSuperMeter,
   changeDrive,
-  damageGuardGauge,
 } from "./resources.js";
 import {
   KNOCKDOWN_TYPES,
@@ -46,7 +45,6 @@ import {
   recordComboEnd,
 } from "./telemetry.js";
 import { VANGUARD_MOVESET } from "./movesets/vanguard.js";
-import { EMBER_MOVESET } from "./movesets/ember.js";
 
 export const TICK_RATE = 60;
 
@@ -80,7 +78,6 @@ const DRIVE_RUSH_ADVANTAGE_FRAMES = 4;
 
 const BASE_MOVESETS = Object.freeze({
   vanguard: VANGUARD_MOVESET,
-  ember: EMBER_MOVESET,
 });
 
 function exposeMoveset(moveset) {
@@ -96,23 +93,14 @@ function exposeMoveset(moveset) {
  */
 export const MOVESETS = Object.freeze({
   vanguard: exposeMoveset(VANGUARD_MOVESET),
-  ember: exposeMoveset(EMBER_MOVESET),
 });
 
 export const CHARACTER_TEMPLATES = Object.freeze({
   vanguard: Object.freeze({
     id: "vanguard",
-    name: VANGUARD_MOVESET.name,
-    archetype: VANGUARD_MOVESET.archetype,
+    name: "苍流",
     controlLayout: "sixButton",
     moves: Object.keys(VANGUARD_MOVESET.moves),
-  }),
-  ember: Object.freeze({
-    id: "ember",
-    name: EMBER_MOVESET.name,
-    archetype: EMBER_MOVESET.archetype,
-    controlLayout: "fourButton",
-    moves: Object.keys(EMBER_MOVESET.moves),
   }),
 });
 
@@ -127,10 +115,6 @@ const compatibilityMoves = {};
 for (const [id, move] of Object.entries(VANGUARD_MOVESET.moves)) compatibilityMoves[id] = move;
 for (const [alias, target] of Object.entries(VANGUARD_MOVESET.aliases ?? {})) {
   compatibilityMoves[alias] = VANGUARD_MOVESET.moves[target];
-}
-for (const alias of ["rekkaLight", "rekkaHeavy", "airHammer"]) {
-  const target = EMBER_MOVESET.aliases?.[alias];
-  if (target) compatibilityMoves[alias] = EMBER_MOVESET.moves[target];
 }
 compatibilityMoves.light = compatibilityMoves.highLight;
 compatibilityMoves.heavy = compatibilityMoves.highHeavy;
@@ -291,7 +275,7 @@ function normalizeOptions(options) {
   const p1 = playerInput[0] ?? options.p1 ?? {};
   const p2 = playerInput[1] ?? options.p2 ?? {};
   const p1Template = normalizeTemplateId(p1.templateId ?? p1.template ?? options.playerTemplate);
-  const p2Template = normalizeTemplateId(p2.templateId ?? p2.template ?? options.aiTemplate ?? "ember");
+  const p2Template = normalizeTemplateId(p2.templateId ?? p2.template ?? options.aiTemplate);
   const defaultHealth = finiteNumber(options.maxHealth, DEFAULTS.maxHealth, 100, 10000);
   const config = {
     width,
@@ -354,9 +338,8 @@ function normalizePlayer(value, fallback) {
 }
 
 function normalizeTemplateId(value) {
-  const raw = value && typeof value === "object" ? value.id ?? value.templateId : value;
-  const id = String(raw ?? "vanguard").toLowerCase();
-  return BASE_MOVESETS[id] ? id : "vanguard";
+  void value;
+  return "vanguard";
 }
 
 function createArena(config) {
@@ -525,49 +508,21 @@ function resolveSystemShortcut(fighter, input, pressedButtons) {
   const direction = relativeDirection(input, fighter.facing);
   const back = direction === "back" || direction === "downBack";
   if (pressedButtons.includes("throw")) {
-    if (fighter.templateId === "ember" && input.lp && input.lk) {
-      return { moveId: findMoveId("ember", back ? ["backRoll", "backwardRoll"] : ["forwardRoll", "rollForward", "roll"]) };
-    }
-    return {
-      moveId: fighter.templateId === "vanguard"
-        ? (back ? "somersaultThrow" : "shoulderThrow")
-        : findMoveId("ember", back ? ["hatsugane", "backThrow", "throwC"] : ["issetsu", "forwardThrow", "throwD", "throw"]),
-    };
+    return { moveId: back ? "somersaultThrow" : "shoulderThrow" };
   }
   if (pressedButtons.includes("system1")) {
-    return {
-      moveId: fighter.templateId === "vanguard"
-        ? "driveParry"
-        : findMoveId("ember", back ? ["backRoll", "backwardRoll"] : ["forwardRoll", "rollForward", "roll"]),
-    };
+    return { moveId: "driveParry" };
   }
   if (pressedButtons.includes("system2")) {
-    if (fighter.templateId === "vanguard") {
-      return {
-        moveId: fighter.action === "knockdown"
-          ? "driveReversalWakeup"
-          : fighter.action === "block" || fighter.blockstunFrames > 0
-            ? "driveReversalBlock"
-            : "driveImpact",
-      };
-    }
     return {
-      moveId: findMoveId(
-        "ember",
-        fighter.action === "block" || fighter.blockstunFrames > 0
-          ? ["guardCancelBlowback", "gcBlowback", "guardCancelCD"]
-          : ["groundBlowback", "blowback", "standCD"],
-      ),
+      moveId: fighter.action === "knockdown"
+        ? "driveReversalWakeup"
+        : fighter.action === "block" || fighter.blockstunFrames > 0
+          ? "driveReversalBlock"
+          : "driveImpact",
     };
   }
   return null;
-}
-
-function findMoveId(templateId, preferredIds) {
-  const moves = BASE_MOVESETS[templateId]?.moves ?? {};
-  for (const id of preferredIds) if (moves[id]) return id;
-  const lowered = preferredIds.map((value) => value.toLowerCase());
-  return Object.keys(moves).find((id) => lowered.some((needle) => id.toLowerCase().includes(needle))) ?? null;
 }
 
 function resolveLegacyRequest(game, fighter, input, pressedButtons) {
@@ -578,11 +533,10 @@ function resolveLegacyRequest(game, fighter, input, pressedButtons) {
   const light = pressedButtons.includes("lp");
   if (!heavy && !light) return null;
   if (airborne) {
-    if (fighter.templateId === "vanguard" && heavy) {
+    if (heavy) {
       const motion = matchMotion(fighter.directionHistory, "qcb", frame);
       if (motion) return { moveId: "airTatsu", motionMatch: motion };
     }
-    if (fighter.templateId === "ember" && heavy && input.down) return { moveId: "airHammer" };
     return { moveId: light ? "airLight" : "airHeavy" };
   }
   if (heavy) {
@@ -591,8 +545,7 @@ function resolveLegacyRequest(game, fighter, input, pressedButtons) {
   }
   const qcf = matchMotion(fighter.directionHistory, "qcf", frame);
   if (qcf) {
-    if (fighter.templateId === "vanguard") return { moveId: light ? "fireballLight" : "fireballHeavy", motionMatch: qcf };
-    return { moveId: light ? "rekkaLight" : "rekkaHeavy", motionMatch: qcf };
+    return { moveId: light ? "fireballLight" : "fireballHeavy", motionMatch: qcf };
   }
   if (input.down) return { moveId: light ? "lowLight" : "lowHeavy" };
   if (relativeDirection(input, fighter.facing) === "forward") return { moveId: light ? "midLight" : "midHeavy" };
@@ -686,7 +639,6 @@ function updateFighter(game, fighter, input) {
   }
   if (fighter.action === "block" && fighter.blockstunFrames > 0) {
     ensureContextualBuffer(game, fighter, input, "blockstun");
-    if (fighter.templateId !== "vanguard" && tryStartBufferedMove(game, fighter, { allowImmobilized: true })) return;
     const recovered = updateBlockstun(fighter);
     if (
       recovered &&
@@ -753,24 +705,16 @@ function tryStartBufferedMove(game, fighter, options = {}) {
 
 function ensureContextualBuffer(game, fighter, input, context) {
   const heldSystem2 = input.system2 || (input.hp && input.hk);
-  const heldRoll = input.system1 || input.throw || (input.lp && input.lk);
   const heldForward = relativeDirection(input, fighter.facing) === "forward";
   let moveId = null;
   if (context === "blockstun") {
     if (
-      fighter.templateId === "vanguard" &&
       fighter.blockstunFrames <= REVERSAL_BUFFER_FRAMES &&
       heldForward &&
       heldSystem2
     ) moveId = "driveReversalBlock";
-    if (fighter.templateId === "ember" && heldSystem2) moveId = findMoveId("ember", ["guardCancelBlowback", "gcBlowback"]);
-    if (fighter.templateId === "ember" && heldRoll) {
-      const back = ["back", "downBack", "upBack"].includes(relativeDirection(input, fighter.facing));
-      moveId = findMoveId("ember", back ? ["guardCancelRollBackward"] : ["guardCancelRollForward"]);
-    }
   } else if (
     context === "wakeup" &&
-    fighter.templateId === "vanguard" &&
     fighter.knockdownFrames <= REVERSAL_BUFFER_FRAMES &&
     heldForward &&
     heldSystem2
@@ -1061,12 +1005,6 @@ function processMoveFrame(game, fighter, authoredFrame) {
     fighter.x -= fighter.facing * 7.2;
   } else if (tags.has("driveImpact") && authoredFrame >= 8 && authoredFrame <= 27) {
     fighter.x += fighter.facing * 2.6;
-  } else if (
-    fighter.templateId === "ember" &&
-    /aragami|dokugami|konokizu|yanosabi|munotsuchi|kai|kototsuki|redkick/i.test(move.id) &&
-    authoredFrame <= Math.max(...move.activeWindows.map((window) => window.end))
-  ) {
-    fighter.x += fighter.facing * 1.9;
   }
   maybeSpawnProjectile(game, fighter, move, authoredFrame);
   applyTimedResourceChanges(fighter, move, authoredFrame);
@@ -1141,9 +1079,8 @@ function clearCurrentMove(fighter) {
 }
 
 function startJump(game, fighter, input) {
-  const recentDown = fighter.directionHistory.some((entry) => entry.direction === "down" && entry.frame >= game.frame - 7);
   const doubleForward = Boolean(matchMotion(fighter.directionHistory, "forwardForward", game.frame));
-  fighter.jumpType = fighter.templateId === "ember" && (recentDown || doubleForward) ? "hop" : "normal";
+  fighter.jumpType = "normal";
   fighter.onGround = false;
   fighter.airAttackUsed = false;
   fighter.vy = -(fighter.jumpType === "hop" ? game.config.hopSpeed : game.config.jumpSpeed);
@@ -1516,10 +1453,6 @@ function resolveContacts(game, contacts, inputs) {
       setLocomotionAction(defender, "block", defender.blockstunFrames);
       awardContactResources(attacker, defender, move, "block", hit);
       applyContactRefund(attacker, move, "block");
-      if (defender.templateId === "ember") {
-        damageGuardGauge(defender, finite(move.guardDamage, Math.max(2, baseDamage(hit, move) / 20)));
-        if (defender.guardGauge <= 0) applyGuardBreak(game, defender);
-      }
       attacker.lastContact = contactSnapshot(game, attacker, defender, move, "block");
       largestHitstop = Math.max(largestHitstop, Math.max(2, finite(hit.hitstop, finite(move.hitstop, 6)) - 2));
       addEffect(game, "block", contact.impactX, contact.impactY, 10, "#7ee7ff");
@@ -1761,17 +1694,6 @@ function isRollInvulnerable(fighter) {
   const move = fighter.currentMove;
   if (!move || !moveTags(move).has("roll")) return false;
   return fighter.actionFrame + 1 <= finite(move.invulnThroughFrame, 24);
-}
-
-function applyGuardBreak(game, fighter) {
-  fighter.guardGauge = fighter.maxGuardGauge * 0.55;
-  fighter.blockstunFrames = 0;
-  fighter.hitstunFrames = 65;
-  fighter.hitstun = 65;
-  clearCurrentMove(fighter);
-  setLocomotionAction(fighter, "guardBreak", 65);
-  recordCombatEvent(game, "guardBreak", { fighterId: fighter.id });
-  addEffect(game, "guardBreak", fighter.x, fighter.y - fighter.height * 0.65, 24, "#8aa7ff");
 }
 
 function resolveKO(game, attacker, defender, contact) {
@@ -2308,7 +2230,7 @@ function effectiveHitLevel(attacker, defender, move, hit) {
 
 function scaledBaseDamage(attacker, damage) {
   const moveset = BASE_MOVESETS[attacker.templateId];
-  const scale = finite(moveset.healthDamageScale, attacker.templateId === "vanguard" ? 0.1 : 1);
+  const scale = finite(moveset.healthDamageScale, 0.1);
   return Math.max(0, damage * scale);
 }
 
