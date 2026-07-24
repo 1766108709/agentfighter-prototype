@@ -83,7 +83,7 @@ function testAggregationAndIsolation() {
   for (const { options, runtime } of runnerCalls) {
     assert.equal(options.matches, 4);
     assert.equal(options.difficulty, "hard");
-    assert.equal(options.delay, 12);
+    assert.equal(Object.hasOwn(options, "delay"), false);
     assert.equal(options.bestOf, 3);
     assert.equal(options.roundSeconds, 60);
     assert.equal(options.swapSides, true);

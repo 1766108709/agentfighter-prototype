@@ -126,14 +126,14 @@ GitHub Pages 仍只承载静态试玩页，因此在线页会在“接入 Agent�
 - `AI vs AI`：分别选择左右两个脚本，观看它们在完全相同的输入规则下对战。
 - `无头模式`：从命令行批量跑可复现对局，输出胜率、局长、动作、连段、TOD 与吞吐量统计。
 
-AI 对战双方共享所选难度和观测延迟，但各自拥有独立的决策状态、输入队列和适应统计。
+AI 对战双方共享所选难度，并在同一决策帧获得实时公开观测；双方仍各自拥有独立的决策状态、输入队列和适应统计。
 
 ## 无头批量模拟
 
 无需打开网页即可批量运行脚本对战：
 
 ```bash
-npm run headless -- --matches 100 --agent-a pressure --agent-b zoner --delay 12
+npm run headless -- --matches 100 --agent-a pressure --agent-b zoner
 ```
 
 直接调用 CLI 并输出机器可读 JSON：
@@ -148,7 +148,7 @@ node headless.mjs --matches 100 --agent-a pressure --agent-b zoner --template-a 
 
 第三方本地脚本通过 `src/agent-sdk.js` 接入，只实现三个生命周期方法：`reset(matchInfo)`、`act(observation)`、`end(result)`。`act` 必须同步返回由 `createActionV1()` 创建的动作；引擎只会传入 JSON-safe 的公开观察，不会暴露原始 `game`、对手输入、指令缓存或内部 AI 计划。
 
-观测延迟是平台公平规则：无头模式的 `--delay N` 会在统一 runner 中同时缓冲双方感知。决策帧 `F`、全局计时、回合状态和自己的状态始终是当前值；对手、对手飞行物及对手产生的公开事件来自 `F-N`，并通过 `observation.perception.opponentFrame` 明示。开局不足 `N` 帧时使用本回合最早快照，进入新回合会清空旧感知，绝不会看到上回合对手。内置脚本不会再额外叠加延迟。`observation.recentEvents` 只保留有限窗口内的公开战斗摘要，用于学习拆投、逆转、空挥、防御、跳跃和起身习惯；AI 理由、输入缓存和引擎内部对象不会进入事件摘要。
+`ObservationV1` 使用实时公开观测：决策帧 `F` 获得同一帧的全局计时、回合状态、双方状态、飞行物和公开事件。为兼容协议 v1，`observation.perception.delayFrames` 固定为 `0`，`observation.perception.opponentFrame` 等于 `observation.frame`。`observation.recentEvents` 只保留有限窗口内的公开战斗摘要，用于学习拆投、逆转、空挥、防御、跳跃和起身习惯；AI 理由、输入缓存和引擎内部对象不会进入事件摘要。
 
 ```js
 import { createActionV1 } from "./src/agent-sdk.js";
@@ -169,7 +169,7 @@ const summary = runHeadlessTournament(
 );
 ```
 
-`createInProcessAgentRunner()` 还可配置 `observationDelayFrames`、决策间隔、动作保持、deadline，以及非法动作 / 异常 / 超时后的 `neutral`、`hold-last` 或 `disable` 策略。它只适用于可信本地代码：进程内 JavaScript 不可抢占、不是沙箱，死循环仍会锁死比赛，禁止直接运行用户上传脚本。外部 Agent Gateway 会把整场无头引擎和上传脚本一起放进一次性 Worker，并在 Worker 内再限制 VM 能力与单次调用时间；公网多租户部署还必须增加进程/容器级隔离。
+`createInProcessAgentRunner()` 还可配置决策间隔、动作保持、deadline，以及非法动作 / 异常 / 超时后的 `neutral`、`hold-last` 或 `disable` 策略。它只适用于可信本地代码：进程内 JavaScript 不可抢占、不是沙箱，死循环仍会锁死比赛，禁止直接运行用户上传脚本。外部 Agent Gateway 会把整场无头引擎和上传脚本一起放进一次性 Worker，并在 Worker 内再限制 VM 能力与单次调用时间；公网多租户部署还必须增加进程/容器级隔离。
 
 种子只会作为可复现输入传给 Agent。内置脚本遵守种子；自定义 Agent 仍可读取时间、`Math.random()` 或网络，因此汇总会标为 `agents: "unverified"`，平台只保证战斗引擎和已给定动作序列的确定性。
 
@@ -187,7 +187,6 @@ const summary = runHeadlessTournament(
 - `--template-a <vanguard|ember>`：选择参赛者 A 的角色模板。
 - `--template-b <vanguard|ember>`：选择参赛者 B 的角色模板。
 - `--difficulty <easy|normal|hard|expert>`：设置双方难度。
-- `--delay <帧数>`：设置双方的 AI 观测延迟。
 - `--seed <整数>`：设置可复现的锦标赛种子。
 - `--round-seconds <秒>`、`--best-of <奇数>`：设置回合时间和赛制。
 - `--format json`：将汇总结果输出为 JSON。

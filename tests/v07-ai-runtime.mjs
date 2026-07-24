@@ -142,7 +142,6 @@ function assertDualController(input) {
   const ai = createScriptAI({
     preset: "balanced",
     difficulty: "hard",
-    observationDelayFrames: 0,
     seed: 17,
     movesets: injectedMovesets,
   });
@@ -178,7 +177,6 @@ function assertDualController(input) {
   const ai = createScriptAI({
     preset: "pressure",
     difficulty: "expert",
-    observationDelayFrames: 0,
     seed: 3,
     movesets: injectedMovesets,
   });
@@ -201,7 +199,6 @@ function assertDualController(input) {
   const ai = createScriptAI({
     preset: "balanced",
     difficulty: "expert",
-    observationDelayFrames: 0,
     seed: 5,
     movesets: injectedMovesets,
   });
@@ -209,16 +206,21 @@ function assertDualController(input) {
   assert.equal(ai.getDebugState().lastPlan.intent, "whiffPunish", "visible recovery must trigger whiff punishment");
 }
 
-// Observation delay applies to opponent state while self-owned hit confirms
-// remain immediate.
+// Script AI observations stay on the current simulation frame.
 {
+  for (const observationDelayFrames of [0, 1]) {
+    assert.throws(
+      () => createScriptAI({ observationDelayFrames }),
+      /removed/i,
+      "legacy script AI must reject the removed observation delay option",
+    );
+  }
   const self = fighter();
   const opponent = fighter({ id: 1, x: 900, facing: -1 });
   const game = mockGame(self, opponent, 0);
   const ai = createScriptAI({
     preset: "zoner",
     difficulty: "normal",
-    observationDelayFrames: 3,
     seed: 9,
     movesets: injectedMovesets,
   });
@@ -227,11 +229,11 @@ function assertDualController(input) {
   for (let frame = 1; frame <= 3; frame += 1) {
     game.frame = frame;
     ai.decide(game, 0);
+    assert.equal(ai.getDebugState().observedFrame, frame, "script AI must observe the current frame");
   }
-  assert.equal(ai.getDebugState().observedFrame, 0, "3F delay must still expose frame 0 at live frame 3");
   game.frame = 4;
   ai.decide(game, 0);
-  assert.equal(ai.getDebugState().observedFrame, 1, "delayed observation must advance one frame at a time");
+  assert.equal(ai.getDebugState().observedFrame, 4, "realtime observation must advance with the live frame");
 }
 
 // The real runner builds action columns from MOVESETS and always emits the new
@@ -244,7 +246,6 @@ function assertDualController(input) {
     templateA: "vanguard",
     templateB: "ember",
     difficulty: "hard",
-    delay: 4,
     seed: 71,
     roundSeconds: 10,
     bestOf: 1,
@@ -269,4 +270,4 @@ function assertDualController(input) {
   }
 }
 
-process.stdout.write("v0.7 ai runtime ok · planner/executor + delayed reads + dynamic headless telemetry\n");
+process.stdout.write("v0.7 ai runtime ok · planner/executor + realtime reads + dynamic headless telemetry\n");

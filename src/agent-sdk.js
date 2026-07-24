@@ -14,7 +14,7 @@ const INPUT_KEYS = Object.freeze(Object.keys(EMPTY_COMBAT_INPUT));
 const INPUT_KEY_SET = new Set(INPUT_KEYS);
 const ACTION_TOP_LEVEL_KEY_SET = new Set(["schema", "version", "input"]);
 const RUNNER_OPTION_KEY_SET = new Set([
-  "decisionIntervalFrames", "observationDelayFrames", "holdLastAction", "deadlineMs",
+  "decisionIntervalFrames", "holdLastAction", "deadlineMs",
   "invalidActionPolicy", "exceptionPolicy", "timeoutPolicy", "onDiagnostic", "clock",
 ]);
 const FAILURE_POLICIES = new Set(["neutral", "hold-last", "disable"]);
@@ -252,7 +252,6 @@ export const createScriptAIAdapter = createScriptAIAgent;
  * @param {{reset?:Function, act:Function, end?:Function, name?:string}} agent Agent V1
  * @param {object} [options]
  * @param {number} [options.decisionIntervalFrames=1]
- * @param {number} [options.observationDelayFrames=0] platform-enforced delay
  * @param {boolean} [options.holdLastAction=true]
  * @param {number} [options.deadlineMs=Infinity]
  * @param {'neutral'|'hold-last'|'disable'} [options.invalidActionPolicy='neutral']
@@ -264,11 +263,13 @@ export const createScriptAIAdapter = createScriptAIAgent;
  */
 export function createInProcessAgentRunner(agent, options = {}) {
   if (!agent || typeof agent.act !== "function") throw new TypeError("Agent V1 must implement act(observation)");
+  if (Object.hasOwn(options, "observationDelayFrames")) {
+    throw new TypeError("observationDelayFrames has been removed; observations are always real-time");
+  }
   const inspectedOptions = inspectDataObject(options, "runner option", RUNNER_OPTION_KEY_SET);
   if (inspectedOptions.errors.length > 0) throw new TypeError(`Invalid runner options: ${inspectedOptions.errors.join("; ")}`);
   const runnerOptions = inspectedOptions.values;
   const decisionIntervalFrames = strictInteger(runnerOptions.decisionIntervalFrames, 1, 3600, 1, "decisionIntervalFrames");
-  const observationDelayFrames = strictInteger(runnerOptions.observationDelayFrames, 0, 3600, 0, "observationDelayFrames");
   if (runnerOptions.holdLastAction !== undefined && typeof runnerOptions.holdLastAction !== "boolean") {
     throw new TypeError("holdLastAction must be boolean");
   }
@@ -294,9 +295,6 @@ export function createInProcessAgentRunner(agent, options = {}) {
   let disabled = false;
   let nextDecisionFrame = 0;
   let matchInfo = null;
-  let observationHistory = [];
-  let latestObservationFrame = -1;
-  let latestObservationRound = null;
 
   function emit(kind, frame, message, details = {}) {
     const nonDeterministic = details?.nonDeterministic === true;
@@ -335,9 +333,6 @@ export function createInProcessAgentRunner(agent, options = {}) {
     diagnosticCounts = Object.create(null);
     disabled = false;
     nextDecisionFrame = 0;
-    observationHistory = [];
-    latestObservationFrame = -1;
-    latestObservationRound = null;
     try {
       const returned = agent.reset?.(info);
       if (isThenable(returned)) {
@@ -352,8 +347,9 @@ export function createInProcessAgentRunner(agent, options = {}) {
   }
 
   function act(observation) {
+    assertRealtimeObservation(observation);
     const decisionFrame = nonNegative(observation?.frame);
-    const observed = selectDelayedObservation(observation, decisionFrame);
+    const observed = observation;
     if (disabled) return remember(observation, observed, neutral, "disabled", false, 0, null);
     if (decisionFrame < nextDecisionFrame) {
       const held = holdLastAction ? lastAction : neutral;
@@ -406,35 +402,6 @@ export function createInProcessAgentRunner(agent, options = {}) {
     }
     lastAction = validated.action;
     return remember(observation, observed, validated.action, "agent", true, elapsed, null);
-  }
-
-  function selectDelayedObservation(observation, decisionFrame) {
-    const round = observation?.round?.number ?? null;
-    if (decisionFrame < latestObservationFrame || (latestObservationRound !== null && round !== latestObservationRound)) {
-      observationHistory = [];
-    }
-    latestObservationRound = round;
-    const latest = observationHistory[observationHistory.length - 1];
-    if (latest && nonNegative(latest.frame) === decisionFrame) observationHistory[observationHistory.length - 1] = observation;
-    else observationHistory.push(observation);
-    latestObservationFrame = decisionFrame;
-
-    const targetFrame = decisionFrame - observationDelayFrames;
-    while (
-      observationHistory.length > 2 &&
-      nonNegative(observationHistory[1]?.frame) <= targetFrame
-    ) observationHistory.shift();
-
-    let selected = observationHistory[0] ?? observation;
-    for (let index = observationHistory.length - 1; index >= 0; index -= 1) {
-      if (nonNegative(observationHistory[index]?.frame) <= targetFrame) {
-        selected = observationHistory[index];
-        break;
-      }
-    }
-    // Before enough frames exist, every participant receives the same earliest
-    // legal snapshot instead of being allowed to peek at current state.
-    return composePerceivedObservation(observation, selected, observationDelayFrames);
   }
 
   function decide(game, selfIndex = 0) {
@@ -506,10 +473,24 @@ export function createInProcessAgentRunner(agent, options = {}) {
     },
     get disabled() { return disabled; },
     get nonDeterministic() { return Number.isFinite(deadlineMs); },
-    get observationDelayFrames() { return observationDelayFrames; },
     get lastDecision() { return lastDecision; },
     get matchInfo() { return matchInfo; },
   };
+}
+
+function assertRealtimeObservation(observation) {
+  if (
+    !isPlainObject(observation)
+    || !Number.isInteger(observation.frame)
+    || observation.frame < 0
+    || !isPlainObject(observation.perception)
+    || observation.perception.delayFrames !== 0
+    || observation.perception.opponentFrame !== observation.frame
+  ) {
+    throw new TypeError(
+      "Agent V1 observations must be real-time: perception.delayFrames=0 and perception.opponentFrame=frame",
+    );
+  }
 }
 
 function publicFighter(fighter = {}, relation) {
@@ -619,41 +600,6 @@ function publicCombatEvent(game, event) {
   const range = Number.isFinite(Number(event.range)) ? Number(event.range) : Number(move?.range);
   if (Number.isFinite(range)) summary.range = range;
   return summary;
-}
-
-function composePerceivedObservation(current, delayed, delayFrames) {
-  const selfIndex = current.selfIndex;
-  const opponentIndex = 1 - selfIndex;
-  const ownProjectiles = current.projectiles.filter((projectile) => projectile.owner === "self");
-  const delayedOpponentProjectiles = delayed.projectiles.filter((projectile) => projectile.owner === "opponent");
-  const currentSelfEvents = current.recentEvents.filter(
-    (event) => eventActorId(event) === selfIndex,
-  );
-  const delayedOpponentEvents = delayed.recentEvents.filter((event) => {
-    const actor = eventActorId(event);
-    return actor === opponentIndex || actor === null;
-  });
-  const recentEvents = [...currentSelfEvents, ...delayedOpponentEvents]
-    .sort((a, b) => a.frame - b.frame || a.type.localeCompare(b.type))
-    .slice(-OBSERVATION_EVENT_LIMIT);
-  return deepFreeze({
-    ...current,
-    opponent: delayed.opponent,
-    projectiles: [...ownProjectiles, ...delayedOpponentProjectiles]
-      .sort((a, b) => a.id - b.id),
-    recentEvents,
-    perception: {
-      delayFrames,
-      opponentFrame: delayed.frame,
-    },
-  });
-}
-
-function eventActorId(event) {
-  for (const key of ["fighterId", "attackerId", "sourceId", "ownerId"]) {
-    if (event?.[key] === 0 || event?.[key] === 1) return event[key];
-  }
-  return null;
 }
 
 function observationToLegacyGame(observation) {

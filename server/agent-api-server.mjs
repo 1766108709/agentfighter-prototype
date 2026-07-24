@@ -18,9 +18,9 @@ const DEFAULT_DATA_DIR = resolve(DEFAULT_ROOT, ".data", "agent-api");
 const MAX_BODY_BYTES = 128 * 1024;
 const DEFAULT_COOLDOWN_MS = 2_000;
 const DEFAULT_OFFICIAL_RULESET = Object.freeze({
-  id: "standard-v1",
+  id: "standard-v2",
   difficulty: "normal",
-  delay: 12,
+  observation: "realtime",
   roundSeconds: 30,
   bestOf: 3,
   seedPolicy: "server-random",
@@ -215,7 +215,7 @@ export async function createAgentApiServer(options = {}) {
             nextMatchAt: cooldowns.get(fighter.id)
               ? new Date(cooldowns.get(fighter.id)).toISOString()
               : null,
-            observationDelayFrames: { minimum: 0, maximum: 120, default: 12 },
+            observation: { mode: "realtime", delayFrames: 0 },
             simulation: {
               seed: { minimum: 0, maximum: 0xffffffff },
               roundSeconds: { minimum: 10, maximum: 300, default: 30 },
@@ -364,7 +364,6 @@ export async function createAgentApiServer(options = {}) {
         const opponent = await resolveOpponent(store, builtinStorage, fighter.id, body.opponentId);
         const settings = {
           difficulty: officialRuleset.difficulty,
-          delay: officialRuleset.delay,
           roundSeconds: officialRuleset.roundSeconds,
           bestOf: officialRuleset.bestOf,
           seed: randomBytes(4).readUInt32BE(0),
@@ -557,7 +556,6 @@ function matchSettings(body) {
   if (bestOf % 2 === 0) throw new ApiError(400, "INVALID_BEST_OF", "bestOf must be odd.");
   return {
     seed: boundedInteger(body.seed, 0, 0xffffffff, randomBytes(4).readUInt32BE(0)),
-    delay: boundedInteger(body.delay, 0, 120, 12),
     roundSeconds,
     bestOf,
     difficulty: enumValue(body.difficulty, ["easy", "normal", "hard", "expert"], "normal"),
@@ -566,7 +564,7 @@ function matchSettings(body) {
 
 function assertMatchRequestKeys(body, { allowCode }) {
   const keys = [
-    "opponentId", "seed", "delay", "roundSeconds", "bestOf", "difficulty",
+    "opponentId", "seed", "roundSeconds", "bestOf", "difficulty",
     ...(allowCode ? ["code"] : []),
   ];
   assertAllowedKeys(body, keys);
@@ -847,7 +845,7 @@ function randomIdentifier() {
 function normalizeOfficialRuleset(value) {
   if (value === undefined || value === null) return DEFAULT_OFFICIAL_RULESET;
   if (!isPlainObject(value)) throw new TypeError("officialRuleset must be a plain object");
-  const allowed = new Set(["id", "difficulty", "delay", "roundSeconds", "bestOf"]);
+  const allowed = new Set(["id", "difficulty", "roundSeconds", "bestOf"]);
   const unknown = Object.keys(value).filter((key) => !allowed.has(key));
   if (unknown.length > 0) {
     throw new TypeError(`Unknown officialRuleset fields: ${unknown.join(", ")}`);
@@ -861,7 +859,7 @@ function normalizeOfficialRuleset(value) {
       ["easy", "normal", "hard", "expert"],
       DEFAULT_OFFICIAL_RULESET.difficulty,
     ),
-    delay: boundedInteger(value.delay, 0, 120, DEFAULT_OFFICIAL_RULESET.delay),
+    observation: "realtime",
     roundSeconds: boundedInteger(
       value.roundSeconds,
       10,

@@ -36,7 +36,6 @@ const leftAgentSelect = document.querySelector("#left-agent-select");
 const rightAgentLabel = document.querySelector("#right-agent-label");
 const agentSelect = document.querySelector("#agent-select");
 const difficultySelect = document.querySelector("#difficulty-select");
-const delaySelect = document.querySelector("#delay-select");
 const agentDescription = document.querySelector("#agent-description");
 const controlsPanel = document.querySelector("#controls-panel") || document.querySelector(".controls-panel");
 const controlsTitle = document.querySelector("#controls-title");
@@ -811,7 +810,6 @@ function readMatchConfig() {
     leftPreset: mode === "ai-vs-ai" ? (leftAgentSelect?.value || "balanced") : null,
     rightPreset: agentSelect?.value || "balanced",
     difficulty: difficultySelect?.value || "normal",
-    delay: Number(delaySelect?.value) || 0,
     bestOf: 3,
     roundTimeSeconds: 60,
   };
@@ -827,7 +825,6 @@ function sameMatchConfig(a, b) {
     a.leftPreset === b.leftPreset &&
     a.rightPreset === b.rightPreset &&
     a.difficulty === b.difficulty &&
-    a.delay === b.delay &&
     a.bestOf === b.bestOf &&
     a.roundTimeSeconds === b.roundTimeSeconds
   );
@@ -837,7 +834,6 @@ function createSelectedAI(preset, seed, config, templateId) {
   return createBrowserAgent(preset, {
     templateId,
     difficulty: config.difficulty,
-    observationDelayFrames: config.delay,
     seed,
   });
 }
@@ -869,11 +865,10 @@ function activeRightName() {
 
 function runtimeStatusText() {
   if (isTodShowcase()) return "真实十割表演赛 · 逐击验真中";
-  const delay = activeMatchConfig?.delay ?? 0;
   if (activeMatchConfig?.mode === "ai-vs-ai") {
-    return `${activeLeftName()} vs ${activeRightName()} · ${delay}F 延迟 · 观战中`;
+    return `${activeLeftName()} vs ${activeRightName()} · 实时观测 · 观战中`;
   }
-  return `${activeRightName()} · ${delay}F 延迟`;
+  return `${activeRightName()} · 实时观测`;
 }
 
 function applyActiveModePresentation(mode = activeMatchConfig?.mode) {
@@ -928,7 +923,6 @@ function createFreshTodExhibition() {
     leftPreset: null,
     rightPreset: null,
     difficulty: "expert",
-    delay: 0,
     bestOf: 1,
     roundTimeSeconds: 30,
   };
@@ -1179,13 +1173,13 @@ function handlePhase(now) {
       } else if (activeMatchConfig?.mode === "ai-vs-ai") {
         resultKicker.textContent = winner === "DRAW" ? "AI EXHIBITION · DRAW" : "AI EXHIBITION · MATCH COMPLETE";
         resultTitle.textContent = winner === "DRAW" ? "两名 Agent 战成平局" : `${winner} 获胜`;
-        resultCopy.textContent = `${activeLeftName()} ${game.score?.[0] ?? 0} : ${game.score?.[1] ?? 0} ${activeRightName()}。更换双方风格、难度或观测延迟可开始下一场模拟。`;
+        resultCopy.textContent = `${activeLeftName()} ${game.score?.[0] ?? 0} : ${game.score?.[1] ?? 0} ${activeRightName()}。更换双方风格或难度可开始下一场模拟。`;
         statusNode.textContent = winner === "DRAW" ? "AI 对战结束 · 平局" : `AI 对战结束 · ${winner} 获胜`;
       } else {
         resultKicker.textContent = index === 0 ? "HUMAN WINS" : winner === "DRAW" ? "DRAW" : "SCRIPT WINS";
         resultTitle.textContent = index === 0 ? "你击败了这个 Agent" : winner === "DRAW" ? "势均力敌" : `${activeRightName()} 获胜`;
         resultCopy.textContent = index === 0
-          ? "它的脚本已经暴露出弱点。换个风格，或者降低它的观测延迟再试一次。"
+          ? "它的脚本已经暴露出弱点。换个风格或提高难度，再试一次。"
           : "观察它的距离选择和出招节奏，再用格挡与挥空惩罚破解脚本。";
         statusNode.textContent = index === 0 ? "比赛结束 · 玩家获胜" : winner === "DRAW" ? "比赛结束 · 平局" : `比赛结束 · ${activeRightName()} 获胜`;
       }
@@ -1341,7 +1335,6 @@ leftAgentSelect?.addEventListener("change", updateAgentDescription);
 leftTemplateSelect?.addEventListener("change", updateAgentDescription);
 rightTemplateSelect?.addEventListener("change", updateAgentDescription);
 difficultySelect?.addEventListener("change", updateAgentDescription);
-delaySelect?.addEventListener("change", updateAgentDescription);
 
 window.addEventListener("keydown", (event) => {
   if (event.repeat) return;

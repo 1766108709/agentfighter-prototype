@@ -73,7 +73,7 @@ function observation(templateId, opponentTemplateId, frame = 1) {
     timerFrames: 3_600 - frame,
     side: "left",
     selfIndex: 0,
-    perception: { delayFrames: 8, opponentFrame: Math.max(0, frame - 8) },
+    perception: { delayFrames: 0, opponentFrame: frame },
     round: { number: 1, score: { self: 0, opponent: 0 } },
     arena: { width: 960, height: 540, floorY: 444, left: 60, right: 900 },
     self,

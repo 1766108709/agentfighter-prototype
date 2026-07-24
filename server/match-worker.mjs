@@ -35,7 +35,6 @@ try {
     templateA: request.templateA,
     templateB: request.templateB,
     difficulty: request.difficulty,
-    delay: request.delay,
     seed: request.seed,
     roundSeconds: request.roundSeconds,
     bestOf: request.bestOf,
@@ -55,6 +54,9 @@ try {
 
 function validateRequest(value) {
   if (!value || typeof value !== "object") throw new TypeError("match request must be an object");
+  if (Object.hasOwn(value, "delay")) {
+    throw new TypeError("delay has been removed; observations are always real-time");
+  }
   if (typeof value.codeA !== "string") throw new TypeError("match request requires codeA");
   if (value.codeB !== null && value.codeB !== undefined && typeof value.codeB !== "string") {
     throw new TypeError("codeB must be a string or null");
@@ -76,7 +78,6 @@ function validateRequest(value) {
     templateA: enumValue(value.templateA, ["vanguard", "ember"], "vanguard"),
     templateB: enumValue(value.templateB, ["vanguard", "ember"], "ember"),
     difficulty: enumValue(value.difficulty, ["easy", "normal", "hard", "expert"], "normal"),
-    delay: integer(value.delay, 0, 120, 12),
     seed: integer(value.seed, 0, 0xffffffff, 1),
     roundSeconds,
     bestOf,

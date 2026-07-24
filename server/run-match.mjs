@@ -4,6 +4,12 @@ import { Worker } from "node:worker_threads";
 export const DEFAULT_MATCH_TIMEOUT_MS = 20_000;
 
 export function runSandboxMatch(options = {}) {
+  if (Object.hasOwn(options, "delay")) {
+    return Promise.reject(new MatchSandboxError(
+      "delay has been removed; observations are always real-time",
+      "REMOVED_OPTION",
+    ));
+  }
   const timeoutMs = boundedInteger(
     options.timeoutMs,
     250,

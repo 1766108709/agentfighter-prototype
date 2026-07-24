@@ -22,7 +22,6 @@ export const HEADLESS_DEFAULTS = Object.freeze({
   templateA: "vanguard",
   templateB: "ember",
   difficulty: "normal",
-  delay: 12,
   seed: 1,
   roundSeconds: 60,
   bestOf: 3,
@@ -42,7 +41,6 @@ export const HEADLESS_HELP = `AgentFighter 无头锦标赛 / Headless Tournament
   --template-a <id>      A 模板：vanguard|ember，默认 vanguard
   --template-b <id>      B 模板：vanguard|ember，默认 ember
   --difficulty <level>   easy|normal|hard|expert，默认 normal
-  --delay <frames>       双方观测延迟 0-120F，默认 12
   --seed <uint32>        锦标赛确定性种子，默认 1
   --round-seconds <n>    每回合秒数 10-300，默认 60
   --best-of <odd>        奇数局制 1|3|5|7|9，默认 3
@@ -72,7 +70,6 @@ export function parseHeadlessArgs(argv = []) {
     ["--template-a", "templateA"],
     ["--template-b", "templateB"],
     ["--difficulty", "difficulty"],
-    ["--delay", "delay"],
     ["--seed", "seed"],
     ["--round-seconds", "roundSeconds"],
     ["--best-of", "bestOf"],
@@ -217,7 +214,7 @@ export function runHeadlessTournament(options = {}, runtime = {}) {
       templateA: config.templateA,
       templateB: config.templateB,
       difficulty: config.difficulty,
-      delay: config.delay,
+      observation: "realtime",
       seed: config.seed,
       roundSeconds: config.roundSeconds,
       bestOf: config.bestOf,
@@ -240,7 +237,7 @@ export function formatHeadlessText(summary) {
   const lines = [
     "AgentFighter 无头锦标赛 / Headless Tournament",
     `A: ${a.name} (${a.preset} · ${a.template})  vs  B: ${b.name} (${b.preset} · ${b.template})`,
-    `设置: ${summary.matches} 场 · ${settings.bestOf} 局制 · ${settings.roundSeconds}s/回合 · ${settings.difficulty} · ${settings.delay}F 延迟 · seed ${settings.seed}`,
+    `设置: ${summary.matches} 场 · ${settings.bestOf} 局制 · ${settings.roundSeconds}s/回合 · ${settings.difficulty} · 实时观测 · seed ${settings.seed}`,
     `换边: ${settings.swapSides ? "开启（每场交替）" : "关闭"}`,
     "",
     `A  ${a.wins}胜 ${a.losses}负 ${a.draws}平 · 胜率 ${percent(a.winRate)}`,
@@ -458,9 +455,6 @@ function createTournamentAI(participant, preset, template, config, seed, matchIn
   const agent = injected ?? createScriptAIAgent({
     preset,
     difficulty: config.difficulty,
-    // Fairness delay is enforced once by the platform runner for built-in and
-    // injected Agents alike; the legacy implementation must not apply it twice.
-    observationDelayFrames: 0,
     seed,
     movesets: MOVESETS,
   });
@@ -469,7 +463,6 @@ function createTournamentAI(participant, preset, template, config, seed, matchIn
   const runner = createInProcessAgentRunner(agent, {
     ...sharedOptions,
     ...participantOptions,
-    observationDelayFrames: config.delay,
   });
   runner.source = injected ? "injected" : "preset";
   runner.agentDeterminism = injected ? "unverified" : "seeded-built-in";
@@ -767,6 +760,11 @@ function validateAndNormalize(options, { preserveFormat = false } = {}) {
   if (!options || typeof options !== "object" || Array.isArray(options)) {
     throw new HeadlessArgumentError("options 必须是对象 / options must be an object");
   }
+  if (Object.hasOwn(options, "delay")) {
+    throw new HeadlessArgumentError(
+      "delay 已取消；观测始终实时 / delay has been removed; observations are always real-time",
+    );
+  }
 
   const matches = integerOption(options.matches ?? HEADLESS_DEFAULTS.matches, "matches", 1, MAX_MATCHES);
   const agentA = enumOption(options.agentA ?? HEADLESS_DEFAULTS.agentA, "agent-a", AGENT_IDS);
@@ -774,7 +772,6 @@ function validateAndNormalize(options, { preserveFormat = false } = {}) {
   const templateA = enumOption(options.templateA ?? HEADLESS_DEFAULTS.templateA, "template-a", TEMPLATE_IDS);
   const templateB = enumOption(options.templateB ?? HEADLESS_DEFAULTS.templateB, "template-b", TEMPLATE_IDS);
   const difficulty = enumOption(options.difficulty ?? HEADLESS_DEFAULTS.difficulty, "difficulty", DIFFICULTIES);
-  const delay = integerOption(options.delay ?? HEADLESS_DEFAULTS.delay, "delay", 0, 120);
   const seed = integerOption(options.seed ?? HEADLESS_DEFAULTS.seed, "seed", 0, 0xffffffff);
   const roundSeconds = integerOption(options.roundSeconds ?? HEADLESS_DEFAULTS.roundSeconds, "round-seconds", 10, 300);
   const bestOf = integerOption(options.bestOf ?? HEADLESS_DEFAULTS.bestOf, "best-of", 1, 9);
@@ -814,7 +811,6 @@ function validateAndNormalize(options, { preserveFormat = false } = {}) {
     templateA,
     templateB,
     difficulty,
-    delay,
     seed: seed >>> 0,
     roundSeconds,
     bestOf,

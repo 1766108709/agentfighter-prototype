@@ -260,7 +260,7 @@ function makeObservation(frame) {
     timerFrames: 3600 - frame,
     side: "left",
     selfIndex: 0,
-    perception: { delayFrames: 12, opponentFrame: Math.max(0, frame - 12) },
+    perception: { delayFrames: 0, opponentFrame: frame },
     round: { number: 1, score: { self: 0, opponent: 0 } },
     arena: { width: 960, height: 540, floorY: 460, left: 48, right: 912 },
     self: makeFighter("self", "Same Public Self", "vanguard", frame, selfX, 1),
@@ -427,7 +427,7 @@ function testResetClearsOwnHistory() {
   return first.length;
 }
 
-async function testSymmetricPlatformDelay() {
+async function testSymmetricRealtimeObservation() {
   // The formal evaluator is intentionally outside the candidate dependency
   // graph and may load trusted built-in tournament support.
   const { runHeadlessTournament } = await import("../src/headless.js");
@@ -466,7 +466,6 @@ async function testSymmetricPlatformDelay() {
     templateA: "vanguard",
     templateB: "ember",
     difficulty: "normal",
-    delay: 12,
     seed: 0x51a7,
     roundSeconds: 10,
     bestOf: 1,
@@ -474,28 +473,23 @@ async function testSymmetricPlatformDelay() {
     maxFramesPerMatch: 120,
   }, {
     agents: { A: wrap("A", candidate), B: wrap("B", neutral) },
-    // Even participant-specific attempts cannot override the platform delay.
-    runnerOptionsByParticipant: {
-      A: { observationDelayFrames: 0 },
-      B: { observationDelayFrames: 120 },
-    },
     onDecision({ frame, decisions }) {
       decisionFrames += 1;
       for (const participant of ["A", "B"]) {
         assert.equal(decisions[participant].decisionFrame, frame, `${participant} decision frame`);
-        assert.equal(decisions[participant].observedFrame, Math.max(0, frame - 12), `${participant} platform delay`);
+        assert.equal(decisions[participant].observedFrame, frame, `${participant} realtime observation`);
       }
     },
   });
-  assert.equal(summary.settings.delay, 12, "formal match setting must retain 12F delay");
+  assert.equal(Object.hasOwn(summary.settings, "delay"), false, "formal match settings must remove delay");
   assert.equal(decisionFrames, summary.totalFrames, "every formal frame must expose both decisions");
-  assert(observed.A.length > 12 && observed.B.length > 12, "formal delay check must pass the warmup window");
+  assert(observed.A.length > 0 && observed.B.length > 0, "formal realtime check must receive observations");
   assert.equal(observed.A.length, observed.B.length, "both participants must receive equal decision counts");
   for (const participant of ["A", "B"]) {
     observed[participant].forEach((entry, index) => {
       assert.equal(entry.frame, index, `${participant} current self frame`);
-      assert.equal(entry.delayFrames, 12, `${participant} declared perception delay`);
-      assert.equal(entry.opponentFrame, Math.max(0, index - 12), `${participant} delayed opponent frame`);
+      assert.equal(entry.delayFrames, 0, `${participant} declared realtime perception`);
+      assert.equal(entry.opponentFrame, index, `${participant} current opponent frame`);
     });
   }
   return summary.totalFrames;
@@ -504,10 +498,10 @@ async function testSymmetricPlatformDelay() {
 const provenance = testObservationAndHistoryOnly();
 const nameFrames = testPublicNameAgnosticism();
 const resetFrames = testResetClearsOwnHistory();
-const formalFrames = await testSymmetricPlatformDelay();
+const formalFrames = await testSymmetricRealtimeObservation();
 
 process.stdout.write(
   `triad-cleanroom ok · modules=${graph.length} · randomized-identities=${provenance.identities.length}`
   + ` · trace-frames=${provenance.frames} · name-frames=${nameFrames}`
-  + ` · reset-frames=${resetFrames} · formal-frames=${formalFrames} · delay=12F/12F\n`,
+  + ` · reset-frames=${resetFrames} · formal-frames=${formalFrames} · realtime=both-sides\n`,
 );

@@ -18,6 +18,10 @@ function createAgent(api) {
         || typeof SharedArrayBuffer !== "undefined"
         || typeof Atomics !== "undefined"
       ) throw new Error("forbidden host capability leaked");
+      if (
+        observation.perception.delayFrames !== 0
+        || observation.perception.opponentFrame !== observation.frame
+      ) throw new Error("sandbox observation is not realtime");
       const towardRight = observation.self.position.x < observation.opponent.position.x;
       return api.action({
         left: !towardRight,
@@ -27,6 +31,18 @@ function createAgent(api) {
     },
   };
 }`;
+
+for (const delay of [0, 120]) {
+  await assert.rejects(
+    runSandboxMatch({ codeA: VALID_AGENT, delay, timeoutMs: 2_000 }),
+    (error) => (
+      error instanceof MatchSandboxError
+      && error.code === "REMOVED_OPTION"
+      && /delay has been removed/i.test(error.message)
+    ),
+    "sandbox matches must reject the removed delay option instead of ignoring it",
+  );
+}
 
 const first = await runSandboxMatch({
   codeA: VALID_AGENT,

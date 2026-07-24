@@ -59,13 +59,11 @@ const game = createGame({
 const leftAI = createScriptAI({
   preset: "pressure",
   difficulty: "hard",
-  observationDelayFrames: 3,
   seed: 0x11111111,
 });
 const rightAI = createScriptAI({
   preset: "zoner",
   difficulty: "normal",
-  observationDelayFrames: 6,
   seed: 0x22222222,
 });
 const recorder = createReplayRecorder(game, {

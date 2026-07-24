@@ -29,7 +29,6 @@ const tournamentOptions = Object.freeze({
   templateA: "vanguard",
   templateB: "ember",
   difficulty: "normal",
-  delay: 8,
   seed: 20260720,
   roundSeconds: 10,
   bestOf: 3,
@@ -123,6 +122,7 @@ function assertSummary(summary, elapsedMs) {
   );
   assert.equal(summary.settings.templateA, tournamentOptions.templateA, "settings must include template A");
   assert.equal(summary.settings.templateB, tournamentOptions.templateB, "settings must include template B");
+  assert.equal(Object.hasOwn(summary.settings, "delay"), false, "settings must not expose the removed delay rule");
   assert.equal(summary.participants.A.template, tournamentOptions.templateA, "participant A must include its template");
   assert.equal(summary.participants.B.template, tournamentOptions.templateB, "participant B must include its template");
 
@@ -170,6 +170,7 @@ function assertSummary(summary, elapsedMs) {
   const text = formatHeadlessText(summary);
   assert(text.includes("vanguard"), "text summary must include template A");
   assert(text.includes("ember"), "text summary must include template B");
+  assert(text.includes("实时观测"), "text summary must state that observations are realtime");
 }
 
 function assertArgumentParsing() {
@@ -179,7 +180,6 @@ function assertArgumentParsing() {
     "--agent-b", "zoner",
     "--template-a=ember",
     "--template-b", "vanguard",
-    "--delay", "6",
     "--no-swap",
     "--format", "json",
   ]);
@@ -189,7 +189,7 @@ function assertArgumentParsing() {
   assert.equal(parsed.agentB, "zoner", "--agent-b must select participant B");
   assert.equal(parsed.templateA, "ember", "--template-a must select participant A's template");
   assert.equal(parsed.templateB, "vanguard", "--template-b must select participant B's template");
-  assert.equal(parsed.delay, 6, "--delay must parse as a frame count");
+  assert.equal(Object.hasOwn(parsed, "delay"), false, "parsed options must not expose a removed delay setting");
   assert.equal(parsed.swapSides, false, "--no-swap must disable side alternation");
   assert.equal(parsed.format, "json", "--format json must be retained");
 
@@ -204,8 +204,8 @@ function assertArgumentParsing() {
     ["--agent-b", "unknown-agent"],
     ["--template-a", "unknown-template"],
     ["--template-b", "unknown-template"],
-    ["--delay", "-1"],
-    ["--delay", "fast"],
+    ["--delay", "0"],
+    ["--delay", "6"],
     ["--format", "xml"],
   ];
   for (const args of invalidCases) {
@@ -218,6 +218,13 @@ function assertArgumentParsing() {
 }
 
 assertArgumentParsing();
+for (const delay of [0, 1]) {
+  assert.throws(
+    () => runHeadlessTournament({ ...tournamentOptions, matches: 1, delay }),
+    /取消|removed/i,
+    "programmatic delay must fail with an explicit migration error",
+  );
+}
 
 const firstStart = performance.now();
 const first = await runHeadlessTournament(tournamentOptions);

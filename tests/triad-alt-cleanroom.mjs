@@ -262,7 +262,7 @@ function observation(frame, identity, ownTemplate) {
     timerFrames: Math.max(0, 3_600 - frame),
     side: facing > 0 ? "left" : "right",
     selfIndex: facing > 0 ? 0 : 1,
-    perception: { delayFrames: 12, opponentFrame: Math.max(0, frame - 12) },
+    perception: { delayFrames: 0, opponentFrame: frame },
     round: { number: Math.floor(frame / 90) + 1, score: { self: 0, opponent: 0 } },
     arena: { width: 960, height: 540, floorY: 460, left: 48, right: 912 },
     self: fighter({
@@ -425,7 +425,6 @@ const summary = runHeadlessTournament({
   templateA: "vanguard",
   templateB: "ember",
   difficulty: "normal",
-  delay: 12,
   seed: randomUint32(),
   roundSeconds: 10,
   bestOf: 1,
@@ -463,7 +462,7 @@ const summary = runHeadlessTournament({
   },
 });
 
-assert.equal(summary.settings.delay, 12);
+assert.equal(Object.hasOwn(summary.settings, "delay"), false);
 assert.equal(summary.matches, 2);
 assert.equal(summary.participants.A.source, "injected");
 assert.equal(summary.participants.B.source, "injected");
@@ -472,16 +471,16 @@ assert.equal(summary.diagnostics.B.total, 0);
 assert.equal(headlessDecisions.length, summary.totalFrames);
 for (const participant of ["A", "B"]) {
   assert.equal(headlessObservations[participant].length, summary.totalFrames);
-  assert.deepEqual(new Set(headlessObservations[participant].map(({ delayFrames }) => delayFrames)), new Set([12]));
+  assert.deepEqual(new Set(headlessObservations[participant].map(({ delayFrames }) => delayFrames)), new Set([0]));
   for (const observed of headlessObservations[participant]) {
-    assert.equal(observed.opponentFrame, Math.max(0, observed.frame - 12));
+    assert.equal(observed.opponentFrame, observed.frame);
   }
 }
 for (const record of headlessDecisions) {
   for (const participant of ["A", "B"]) {
     const decision = record.decisions[participant];
     assert.equal(decision.decisionFrame, record.frame);
-    assert.equal(decision.observedFrame, Math.max(0, record.frame - 12));
+    assert.equal(decision.observedFrame, record.frame);
     assert.equal(decision.opponentObservedFrame, decision.observedFrame);
     assert.equal(decision.observationFrame, decision.observedFrame);
     assert.equal(decision.source, "agent");
@@ -496,5 +495,5 @@ assert.equal(sha256(finalSource), EXPECTED_ENTRY_SHA256, "candidate changed duri
 process.stdout.write(
   `triad-alt-cleanroom ok · sha256=${EXPECTED_ENTRY_SHA256}`
   + ` · graph=${graph.files.length} · identityVariants=${identities.length} · traceFrames=180x2`
-  + ` · headlessMatches=${summary.matches} · headlessFrames=${summary.totalFrames} · bothSidesDelay=12F\n`,
+  + ` · headlessMatches=${summary.matches} · headlessFrames=${summary.totalFrames} · realtime=both-sides\n`,
 );

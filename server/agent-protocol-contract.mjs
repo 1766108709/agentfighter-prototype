@@ -122,7 +122,7 @@ function buildContract() {
     schemas: {
       observationV1: {
         schema: OBSERVATION_V1_SCHEMA,
-        description: "The delayed, player-visible combat state passed to act().",
+        description: "The real-time, player-visible combat state passed to act().",
         example: observation,
       },
       actionV1: {
@@ -149,7 +149,8 @@ function buildContract() {
       },
     },
     perception: {
-      delayMeaning: "Only opponent state, opponent projectiles, and opponent-authored events are delayed. Your own state remains current.",
+      mode: "realtime",
+      frameAlignment: "perception.delayFrames is always 0 and perception.opponentFrame always equals observation.frame.",
       recentEventWindowFrames: OBSERVATION_EVENT_WINDOW_FRAMES,
       recentEventLimit: OBSERVATION_EVENT_LIMIT,
       recentEventTypes: PUBLIC_EVENT_TYPES,

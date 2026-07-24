@@ -62,7 +62,7 @@ function observation(templateId = "vanguard") {
     timerFrames: 3600,
     side: "left",
     selfIndex: 0,
-    perception: { delayFrames: 12, opponentFrame: 0 },
+    perception: { delayFrames: 0, opponentFrame: 1 },
     round: { number: 1, score: { self: 0, opponent: 0 } },
     arena: { width: 960, height: 540, floorY: 450, left: 0, right: 960 },
     self,

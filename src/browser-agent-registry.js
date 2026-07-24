@@ -11,8 +11,8 @@ export const BROWSER_MATCH_SEED_BASE = 20260719;
 export const CUSTOM_BROWSER_AGENTS = Object.freeze({
   [TRIAD_CHAMPION_AGENT_ID]: Object.freeze({
     id: TRIAD_CHAMPION_AGENT_ID,
-    name: "黑盒冠军 · Triad",
-    description: "只读取公开观测，在均衡、压迫与远程三类对手间自适应作战。",
+    name: "自适应型 · Triad",
+    description: "只读取公开实时观测，按距离、资源和对手习惯自适应作战。",
   }),
 });
 
@@ -26,12 +26,10 @@ function attachBrowserMatchReset(runner, id) {
 
 export function createCustomBrowserAgent(id, options = {}) {
   if (id !== TRIAD_CHAMPION_AGENT_ID) return null;
+  assertRealtimeObservation(options);
 
   const metadata = CUSTOM_BROWSER_AGENTS[id];
-  const runner = createInProcessAgentRunner(
-    createTriadChampionAgentAlt(options.templateId),
-    { observationDelayFrames: options.observationDelayFrames ?? 0 },
-  );
+  const runner = createInProcessAgentRunner(createTriadChampionAgentAlt(options.templateId));
 
   runner.name = metadata.name;
   runner.description = metadata.description;
@@ -40,22 +38,20 @@ export function createCustomBrowserAgent(id, options = {}) {
 
 /**
  * Create every browser-controlled fighter behind the same Agent V1 boundary.
- * Built-in scripts receive public observations and platform delay exactly like
- * custom candidates instead of reading the mutable engine game directly.
+ * Built-in scripts receive the same real-time public observations as custom
+ * candidates instead of reading the mutable engine game directly.
  */
 export function createBrowserAgent(id, options = {}) {
+  assertRealtimeObservation(options);
   const custom = createCustomBrowserAgent(id, options);
   if (custom) return custom;
 
   const agent = createScriptAIAgent({
     preset: id,
     difficulty: options.difficulty,
-    observationDelayFrames: 0,
     seed: options.seed,
   });
-  const runner = createInProcessAgentRunner(agent, {
-    observationDelayFrames: options.observationDelayFrames ?? 0,
-  });
+  const runner = createInProcessAgentRunner(agent);
   return attachBrowserMatchReset(runner, id);
 }
 
@@ -84,4 +80,9 @@ export function createBrowserMatchSeedSequence(startIndex = 0) {
 
 export function customBrowserAgentMetadata(id) {
   return CUSTOM_BROWSER_AGENTS[id] ?? null;
+}
+
+function assertRealtimeObservation(options) {
+  if (!Object.hasOwn(options, "observationDelayFrames")) return;
+  throw new RangeError("observationDelayFrames has been removed; observations are always real-time");
 }

@@ -51,6 +51,12 @@ try {
   assert.equal(contract.body.schemas.observationV1.example.schema, "agentfighter.observation");
   assert.equal(contract.body.schemas.actionV1.example.schema, "agentfighter.action");
   assert(contract.body.schemas.observationV1.example.projectiles.length > 0);
+  assert.equal(contract.body.perception.mode, "realtime");
+  assert.equal(contract.body.schemas.observationV1.example.perception.delayFrames, 0);
+  assert.equal(
+    contract.body.schemas.observationV1.example.perception.opponentFrame,
+    contract.body.schemas.observationV1.example.frame,
+  );
 
   const first = await createFighter("API Alpha", "vanguard");
   const second = await createFighter("API Beta", "ember");
@@ -78,8 +84,13 @@ try {
   assert.equal(firstRead.response.status, 200);
   assert.equal(firstRead.body.fighter.id, first.id);
   assert.equal(firstRead.body.activeVersion, null);
+  assert.equal(firstRead.body.officialRuleset.id, "standard-v2");
+  assert.equal(firstRead.body.officialRuleset.observation, "realtime");
   assert.equal(firstRead.body.officialRuleset.seedPolicy, "server-random");
   assert.deepEqual(firstRead.body.officialRuleset.rankedOpponentKinds, ["fighter"]);
+  assert.equal(Object.hasOwn(firstRead.body.officialRuleset, "delay"), false);
+  assert.equal(Object.hasOwn(firstRead.body.limits, "observationDelayFrames"), false);
+  assert.deepEqual(firstRead.body.limits.observation, { mode: "realtime", delayFrames: 0 });
   assert.equal(firstRead.body.limits.sharedMatchCooldownMs, 0);
   assert(!JSON.stringify(firstRead.body).includes("tokenHash"));
 
@@ -124,6 +135,14 @@ try {
   assert(opponents.body.opponents.some((opponent) => opponent.id === second.id));
   assert(!JSON.stringify(opponents.body).includes(AGENT_CODE), "opponent listings must hide source code");
 
+  const removedDelaySimulation = await jsonRequest("/api/agent/fighter/simulate", {
+    method: "POST",
+    headers: firstHeaders,
+    body: JSON.stringify({ delay: 0 }),
+  });
+  assert.equal(removedDelaySimulation.response.status, 400);
+  assert.equal(removedDelaySimulation.body.error.code, "UNKNOWN_FIELDS");
+
   const simulation = await jsonRequest("/api/agent/fighter/simulate", {
     method: "POST",
     headers: firstHeaders,
@@ -148,6 +167,13 @@ try {
   });
   assert.equal(manipulatedChallenge.response.status, 400);
   assert.equal(manipulatedChallenge.body.error.code, "UNKNOWN_FIELDS");
+  const removedDelayChallenge = await jsonRequest("/api/agent/fighter/challenge", {
+    method: "POST",
+    headers: firstHeaders,
+    body: JSON.stringify({ opponentId: second.id, delay: 0 }),
+  });
+  assert.equal(removedDelayChallenge.response.status, 400);
+  assert.equal(removedDelayChallenge.body.error.code, "UNKNOWN_FIELDS");
 
   const challenge = await jsonRequest("/api/agent/fighter/challenge", {
     method: "POST",
@@ -180,6 +206,15 @@ try {
   assert.equal(replay.response.status, 200);
   assert.equal(replay.body.schema, "ReplayV1");
   assert.equal(replay.body.end.metadata.matchId, challenge.body.match.id);
+  assert(
+    replay.body.frames.every((frame) => (
+      frame.decisions?.p1?.observedFrame === frame.sequence
+      && frame.decisions?.p2?.observedFrame === frame.sequence
+      && frame.decisions.p1.opponentObservedFrame === frame.sequence
+      && frame.decisions.p2.opponentObservedFrame === frame.sequence
+    )),
+    "official replays must record realtime observations for both participants",
+  );
 
   const eventView = await jsonRequest(
     `${new URL(challenge.body.match.agentResultUrl).pathname}?view=events`,

@@ -164,7 +164,7 @@ Every runtime object is JSON-safe and versioned. Reject an unsupported
 
 Fetch `GET /api/schemas/agent-v1` for machine-readable, complete examples of
 ObservationV1, ActionV1, MatchInfoV1, and MatchResultV1, plus lifecycle,
-perception-delay, event, input, and sandbox rules. This public endpoint does not
+observation, event, input, and sandbox rules. This public endpoint does not
 require the Fighter Key.
 
 ### MatchInfoV1
@@ -188,7 +188,7 @@ arena.width/height/floorY/left/right
 schema = "agentfighter.observation", version = 1
 frame, roundFrame, tickRate, phase, timerFrames
 side, selfIndex
-perception.delayFrames, perception.opponentFrame
+perception.delayFrames (= 0), perception.opponentFrame (= frame)
 round.number, round.score.self, round.score.opponent
 arena.width/height/floorY/left/right
 self, opponent:
@@ -216,9 +216,10 @@ recentEvents[]:
 
 The observation is JSON-safe and intentionally excludes the mutable game object,
 opponent inputs, command buffers, private plans, and authored collision boxes.
-When observation delay is enabled, the current clock and the fighter's own state
-stay current while opponent-derived information comes from the declared delayed
-frame.
+Every call uses a real-time public snapshot: the clock, both fighters,
+projectiles, and public events all come from `observation.frame`. Protocol-v1
+compatibility fields remain present with `perception.delayFrames = 0` and
+`perception.opponentFrame = observation.frame`.
 
 Public event types in protocol v1 are:
 
@@ -266,7 +267,6 @@ POST /api/agent/fighter/simulate
   "code": "function createAgent(api) { ... }",
   "opponentId": "builtin:balanced",
   "seed": 7,
-  "delay": 12,
   "roundSeconds": 30,
   "bestOf": 3
 }
@@ -283,7 +283,6 @@ Simulation-only settings and bounds:
 
 ```text
 seed: unsigned 32-bit integer
-delay: 0..120 frames
 roundSeconds: 10..300
 bestOf: odd integer 1..9
 difficulty: "easy" | "normal" | "hard" | "expert"
@@ -348,8 +347,8 @@ POST /api/agent/fighter/challenge
 }
 ```
 
-Challenge accepts only `opponentId`. Do not send `code`, `seed`, `delay`,
-`difficulty`, `roundSeconds`, or `bestOf`. The server selects the official
+Challenge accepts only `opponentId`. Do not send `code`, `seed`, `difficulty`,
+`roundSeconds`, or `bestOf`. The server selects the official
 ruleset and random seed, runs your active published version, persists the result
 and replay, and decides whether the match is rank-eligible.
 

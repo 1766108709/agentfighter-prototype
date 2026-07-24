@@ -13,7 +13,7 @@ export const TEMPLATE_LEGS = Object.freeze([
 ]);
 export const GAUNTLET_RULES = Object.freeze({
   difficulty: "hard",
-  delay: 12,
+  observation: "realtime",
   bestOf: 3,
   roundSeconds: 60,
   swapSides: true,
@@ -172,7 +172,6 @@ export function evaluateGauntlet(candidateFactory, options = {}, dependencies = 
           templateA: leg.candidateTemplate,
           templateB: leg.opponentTemplate,
           difficulty: GAUNTLET_RULES.difficulty,
-          delay: GAUNTLET_RULES.delay,
           bestOf: GAUNTLET_RULES.bestOf,
           roundSeconds: GAUNTLET_RULES.roundSeconds,
           swapSides: GAUNTLET_RULES.swapSides,
@@ -212,7 +211,7 @@ export function formatGauntletText(report) {
   const lines = [
     "AgentFighter black-box gauntlet",
     `split=${report.split} seed=${report.seed} samples/opponent=${report.samplesPerOpponent}`,
-    `rules=${report.rules.difficulty} ${report.rules.delay}F BO${report.rules.bestOf} ${report.rules.roundSeconds}s swapSides=${report.rules.swapSides}`,
+    `rules=${report.rules.difficulty} realtime BO${report.rules.bestOf} ${report.rules.roundSeconds}s swapSides=${report.rules.swapSides}`,
     `overall ${formatStats(report.overall)}`,
   ];
 
